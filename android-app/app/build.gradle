@@ -1,0 +1,26 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'kr.co.smartvision.mobile'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'kr.co.smartvision.mobile'
+        minSdk 23
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+        buildConfigField 'String', 'APP_URL', '"' + providers.gradleProperty('appUrl').getOrElse('https://example.invalid/') + '"'
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+}
+
+dependencies {
+    implementation 'androidx.activity:activity:1.10.1'
+    implementation 'androidx.core:core:1.15.0'
+}
