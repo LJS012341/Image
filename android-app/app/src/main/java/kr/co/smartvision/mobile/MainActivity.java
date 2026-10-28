@@ -123,19 +123,6 @@ public class MainActivity extends ComponentActivity {
 
     private final class SmartVisionBridge {
         @JavascriptInterface
-        public void shareUrl(String url) {
-            if (url == null || !url.startsWith("https://")) {
-                return;
-            }
-            runOnUiThread(() -> {
-                Intent shareIntent = new Intent(Intent.ACTION_SEND);
-                shareIntent.setType("text/plain");
-                shareIntent.putExtra(Intent.EXTRA_TEXT, url);
-                startActivity(Intent.createChooser(shareIntent, "분석 결과 링크 공유"));
-            });
-        }
-
-        @JavascriptInterface
         public String savePdf(String encodedPdf, String filename) {
             if (encodedPdf == null || filename == null || !filename.endsWith(".pdf")) {
                 return "";

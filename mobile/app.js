@@ -61,11 +61,6 @@ const followupPanel = document.querySelector('#followup-panel');
 const followupForm = document.querySelector('#followup-form');
 const followupInput = document.querySelector('#followup-input');
 const conversation = document.querySelector('#conversation');
-const printDocument = document.querySelector('#print-document');
-const printTitle = document.querySelector('#print-title');
-const printCreatedAt = document.querySelector('#print-created-at');
-const printImage = document.querySelector('#print-image');
-const printResult = document.querySelector('#print-result');
 let selectedFile = null;
 let previewUrl = null;
 let installPrompt = null;
@@ -171,20 +166,6 @@ function blobToDataUrl(blob) {
         reader.onerror = () => reject(reader.error);
         reader.readAsDataURL(blob);
     });
-}
-
-function bytesToBase64Url(bytes) {
-    let binary = '';
-    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-        binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-    }
-    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function base64UrlToBytes(value) {
-    const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
-    const binary = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '='));
-    return Uint8Array.from(binary, character => character.charCodeAt(0));
 }
 
 function readHistory() {
@@ -504,87 +485,142 @@ document.querySelector('#followup-toggle').addEventListener('click', event => {
     if (!isOpen) followupInput.focus();
 });
 
-function createShareImageData() {
-    if (!currentImageBlob) return null;
-    if (!preview.complete || !preview.naturalWidth) {
-        return currentImageData ? `data:image/jpeg;base64,${currentImageData}` : null;
-    }
-    const scale = Math.min(1, 900 / Math.max(preview.naturalWidth, preview.naturalHeight));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(preview.naturalWidth * scale));
-    canvas.height = Math.max(1, Math.round(preview.naturalHeight * scale));
-    canvas.getContext('2d').drawImage(preview, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL('image/jpeg', 0.62);
-}
-
-async function copyShareLink(url) {
-    try {
-        await navigator.clipboard.writeText(url);
-        return true;
-    } catch {
-        const temporaryInput = document.createElement('textarea');
-        temporaryInput.value = url;
-        temporaryInput.style.position = 'fixed';
-        temporaryInput.style.opacity = '0';
-        document.body.append(temporaryInput);
-        temporaryInput.select();
-        const copied = document.execCommand('copy');
-        temporaryInput.remove();
-        return copied;
-    }
-}
-
+let pdfLibraryPromise;
+let pdfConstructor;
 function loadPdfLibrary() {
-    if (typeof window.html2pdf === 'function') return Promise.resolve();
-    return new Promise((resolve, reject) => {
+    if (typeof pdfConstructor === 'function') return Promise.resolve(pdfConstructor);
+    if (typeof window.jspdf?.jsPDF === 'function') {
+        pdfConstructor = window.jspdf.jsPDF;
+        return Promise.resolve(pdfConstructor);
+    }
+    if (pdfLibraryPromise) return pdfLibraryPromise;
+    pdfLibraryPromise = new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.3/html2pdf.bundle.min.js';
-        script.onload = () => typeof window.html2pdf === 'function'
-            ? resolve()
-            : reject(new Error('PDF 기능을 초기화하지 못했습니다.'));
-        script.onerror = () => reject(new Error('PDF 기능을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.'));
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/3.0.4/jspdf.umd.min.js';
+        script.onload = () => {
+            pdfConstructor = window.jspdf?.jsPDF;
+            if (typeof pdfConstructor !== 'function') {
+                pdfLibraryPromise = null;
+                reject(new Error('PDF 기능을 초기화하지 못했습니다.'));
+                return;
+            }
+            resolve(pdfConstructor);
+        };
+        script.onerror = () => {
+            pdfLibraryPromise = null;
+            reject(new Error('PDF 기능을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.'));
+        };
         document.head.append(script);
     });
+    return pdfLibraryPromise;
 }
 
-document.querySelector('#share-result').addEventListener('click', async () => {
-    if (!currentAnalysis || !window.confirm('링크를 받은 사람은 분석한 사진과 결과를 볼 수 있습니다. 계속할까요?')) return;
-    resultActionStatus.textContent = '';
-    try {
-        const payload = {
-            analysis: currentAnalysis,
-            conversation: currentConversation,
-            image: createShareImageData()
-        };
-        const encoded = bytesToBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
-        if (encoded.length > 1000000) throw new Error('이미지와 결과가 커서 링크로 공유하기 어렵습니다. 더 작은 사진을 사용해 주세요.');
-        const shareUrl = new URL(window.location.href);
-        shareUrl.hash = `share=${encoded}`;
-        if (window.SmartVisionNative?.shareUrl) {
-            window.SmartVisionNative.shareUrl(shareUrl.href);
-            resultActionStatus.textContent = '사진과 결과가 포함된 웹 링크를 공유했습니다.';
-        } else if (navigator.share) {
-            try {
-                const shareRequest = navigator.share({ title: currentAnalysis.title || '스마트 비전 분석 결과', url: shareUrl.href });
-                await shareRequest;
-                resultActionStatus.textContent = '사진과 결과가 포함된 웹 링크를 공유했습니다.';
-            } catch (error) {
-                if (error.name === 'AbortError') return;
-                const copied = await copyShareLink(shareUrl.href);
-                resultActionStatus.textContent = copied
-                    ? '시스템 공유가 허용되지 않아 링크를 복사했습니다.'
-                    : '공유 권한이 거부됐고 링크 복사도 실패했습니다.';
+function wrapPdfText(context, text, maxWidth) {
+    const lines = [];
+    for (const paragraph of text.split('\n')) {
+        let line = '';
+        for (const character of paragraph) {
+            if (line && context.measureText(line + character).width > maxWidth) {
+                lines.push(line);
+                line = character;
+            } else {
+                line += character;
             }
-        } else {
-            const copied = await copyShareLink(shareUrl.href);
-            resultActionStatus.textContent = copied
-                ? '사진과 결과가 포함된 웹 링크를 복사했습니다.'
-                : '링크를 복사하지 못했습니다. 브라우저 권한을 확인해 주세요.';
         }
-    } catch (error) {
-        if (error.name !== 'AbortError') resultActionStatus.textContent = error.message || '공유 링크를 만들지 못했습니다.';
+        lines.push(line);
     }
-});
+    return lines;
+}
+
+async function createAnalysisPdf(analysis, imageBlob) {
+    const JsPDF = await loadPdfLibrary();
+    const pdf = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
+    const pageWidth = 1240;
+    const pageHeight = 1754;
+    const margin = 96;
+    const contentWidth = pageWidth - margin * 2;
+    let canvas;
+    let context;
+    let y;
+    let pageCount = 0;
+
+    const beginPage = () => {
+        if (pageCount > 0) pdf.addPage();
+        pageCount += 1;
+        canvas = document.createElement('canvas');
+        canvas.width = pageWidth;
+        canvas.height = pageHeight;
+        context = canvas.getContext('2d');
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, pageWidth, pageHeight);
+        context.fillStyle = '#17241e';
+        context.textBaseline = 'top';
+        y = margin;
+    };
+
+    const savePage = () => {
+        const pageImage = canvas.toDataURL('image/jpeg', 0.94);
+        pdf.addImage(pageImage, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+    };
+
+    beginPage();
+    context.font = '700 52px sans-serif';
+    const title = analysis.title || '스마트 비전 분석 결과';
+    for (const line of wrapPdfText(context, title, contentWidth)) {
+        context.fillText(line, margin, y);
+        y += 68;
+    }
+    context.font = '26px sans-serif';
+    context.fillStyle = '#52665a';
+    context.fillText(new Date().toLocaleString('ko-KR'), margin, y + 4);
+    y += 62;
+
+    if (imageBlob) {
+        const imageUrl = URL.createObjectURL(imageBlob);
+        const image = new Image();
+        try {
+            image.src = imageUrl;
+            await image.decode();
+            const scale = Math.min(contentWidth / image.naturalWidth, 620 / image.naturalHeight);
+            const imageWidth = image.naturalWidth * scale;
+            const imageHeight = image.naturalHeight * scale;
+            context.drawImage(image, (pageWidth - imageWidth) / 2, y, imageWidth, imageHeight);
+            y += imageHeight + 54;
+        } finally {
+            URL.revokeObjectURL(imageUrl);
+        }
+    }
+
+    const paragraphs = analysisAsText(analysis).split('\n\n');
+    if (paragraphs[0] === title) paragraphs.shift();
+    context.fillStyle = '#17241e';
+    context.font = '700 34px sans-serif';
+    context.fillText('분석 결과', margin, y);
+    y += 54;
+    context.font = '30px sans-serif';
+    const lineHeight = 48;
+    for (const paragraph of paragraphs.join('\n\n').split('\n')) {
+        const lines = wrapPdfText(context, paragraph, contentWidth);
+        for (const line of lines) {
+            if (y + lineHeight > pageHeight - margin) {
+                savePage();
+                beginPage();
+                context.font = '30px sans-serif';
+            }
+            if (line) context.fillText(line, margin, y);
+            y += lineHeight;
+        }
+        y += lineHeight / 2;
+    }
+    savePage();
+
+    const blob = pdf.output('blob');
+    const bytes = new Uint8Array(await blob.slice(0, 5).arrayBuffer());
+    if (new TextDecoder().decode(bytes) !== '%PDF-' || blob.size < 1000) {
+        throw new Error('PDF 파일을 올바르게 생성하지 못했습니다.');
+    }
+    return blob;
+}
 
 document.querySelector('#save-result').addEventListener('click', async () => {
     if (!currentAnalysis) return;
@@ -593,26 +629,9 @@ document.querySelector('#save-result').addEventListener('click', async () => {
     resultActionStatus.textContent = '사진과 분석 내용을 PDF로 만들고 있습니다...';
     try {
         await loadPdfLibrary();
-        printTitle.textContent = currentAnalysis.title || '스마트 비전 분석 결과';
-        printCreatedAt.textContent = new Date().toLocaleString('ko-KR');
-        printResult.textContent = analysisAsText();
-        printImage.hidden = !currentImageBlob;
-        printImage.src = currentImageBlob ? await blobToDataUrl(currentImageBlob) : '';
-        if (currentImageBlob) await printImage.decode();
-        printDocument.hidden = false;
-        printDocument.classList.add('pdf-exporting');
-        document.body.classList.add('pdf-export-mode');
-
         const fileTitle = (currentAnalysis.title || 'analysis').replace(/[^a-zA-Z0-9가-힣_-]/g, '_').slice(0, 40);
         const filename = `smart-vision-${new Date().toISOString().slice(0, 10)}-${fileTitle}.pdf`;
-        const pdfBlob = await window.html2pdf().set({
-            margin: [10, 10, 10, 10],
-            filename,
-            image: { type: 'jpeg', quality: 0.96 },
-            html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak: { mode: ['css', 'legacy'] }
-        }).from(printDocument).toPdf().outputPdf('blob');
+        const pdfBlob = await createAnalysisPdf(currentAnalysis, currentImageBlob);
 
         if (window.SmartVisionNative?.savePdf) {
             const dataUrl = await blobToDataUrl(pdfBlob);
@@ -631,10 +650,6 @@ document.querySelector('#save-result').addEventListener('click', async () => {
     } catch (error) {
         resultActionStatus.textContent = `PDF 저장 실패: ${error.message}`;
     } finally {
-        printDocument.hidden = true;
-        printDocument.classList.remove('pdf-exporting');
-        document.body.classList.remove('pdf-export-mode');
-        printImage.removeAttribute('src');
         saveButton.disabled = false;
     }
 });
@@ -700,44 +715,7 @@ async function loadHistoryEntry(entry) {
     renderAnalysis(currentAnalysis);
 }
 
-async function restoreSharedResult() {
-    const shared = new URLSearchParams(window.location.hash.slice(1)).get('share');
-    if (!shared) return;
-    try {
-        const payload = JSON.parse(new TextDecoder().decode(base64UrlToBytes(shared)));
-        if (!payload.analysis || typeof payload.analysis !== 'object') throw new Error('공유된 분석 결과가 올바르지 않습니다.');
-        currentAnalysis = payload.analysis;
-        currentConversation = Array.isArray(payload.conversation) ? payload.conversation : [];
-        currentHistoryId = null;
-        currentImageBlob = null;
-        currentImageData = null;
-        if (typeof payload.image === 'string' && /^data:image\/(jpeg|png|webp);base64,/i.test(payload.image)) {
-            const [metadata, base64] = payload.image.split(',', 2);
-            const mimeType = metadata.match(/^data:([^;]+)/)?.[1] || 'image/jpeg';
-            currentImageBlob = new Blob([Uint8Array.from(atob(base64), character => character.charCodeAt(0))], { type: mimeType });
-            currentImageData = base64;
-            selectedFile = currentImageBlob;
-            if (previewUrl) URL.revokeObjectURL(previewUrl);
-            previewUrl = URL.createObjectURL(currentImageBlob);
-            preview.src = previewUrl;
-            preview.hidden = false;
-            emptyPhoto.hidden = true;
-            analyzeButton.disabled = false;
-        } else {
-            selectedFile = null;
-            preview.hidden = true;
-            emptyPhoto.hidden = false;
-            analyzeButton.disabled = true;
-        }
-        renderAnalysis(currentAnalysis);
-        resultActionStatus.textContent = '공유된 사진과 분석 결과를 불러왔습니다.';
-    } catch (error) {
-        resultActionStatus.textContent = `공유 링크를 불러오지 못했습니다: ${error.message}`;
-    }
-}
-
 renderHistory();
-restoreSharedResult();
 
 window.addEventListener('beforeinstallprompt', event => {
     event.preventDefault();
