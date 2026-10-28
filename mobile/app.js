@@ -2,6 +2,9 @@ const KEY_NAME = 'smart-vision-gemini-key';
 const MODEL_NAME = 'smart-vision-gemini-model';
 const MODE_NAME = 'smart-vision-analysis-mode';
 const HISTORY_NAME = 'smart-vision-analysis-history';
+const HISTORY_IMAGE_DB = 'smart-vision-history-images';
+const USAGE_NAME = 'smart-vision-model-usage';
+const MODEL_LIMIT_NAME = 'smart-vision-model-limits';
 const DEFAULT_MODEL = 'gemini-3.6-flash';
 const HISTORY_LIMIT = 30;
 const PROMPT = `사진의 중심 대상을 동물, 물건, 음식, 글씨, 그 외 중 하나로 분류하고 한국어 JSON만 반환하세요.
@@ -48,19 +51,138 @@ const modeSelect = document.querySelector('#mode-select');
 const historyList = document.querySelector('#history-list');
 const historyCount = document.querySelector('#history-count');
 const historyStatus = document.querySelector('#history-status');
+const modelUsage = document.querySelector('#model-usage');
+const modelLimit = document.querySelector('#model-limit');
 const resultActions = document.querySelector('#result-actions');
 const resultActionStatus = document.querySelector('#result-action-status');
 const followupPanel = document.querySelector('#followup-panel');
 const followupForm = document.querySelector('#followup-form');
 const followupInput = document.querySelector('#followup-input');
 const conversation = document.querySelector('#conversation');
+const printDocument = document.querySelector('#print-document');
+const printTitle = document.querySelector('#print-title');
+const printCreatedAt = document.querySelector('#print-created-at');
+const printImage = document.querySelector('#print-image');
+const printResult = document.querySelector('#print-result');
 let selectedFile = null;
 let previewUrl = null;
 let installPrompt = null;
 let currentAnalysis = null;
 let currentImageData = null;
+let currentImageBlob = null;
 let currentHistoryId = null;
 let currentConversation = [];
+
+function openHistoryImageDb() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(HISTORY_IMAGE_DB, 1);
+        request.onupgradeneeded = () => request.result.createObjectStore('images');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function saveHistoryImage(id, blob) {
+    const database = await openHistoryImageDb();
+    await new Promise((resolve, reject) => {
+        const transaction = database.transaction('images', 'readwrite');
+        transaction.objectStore('images').put(blob, id);
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+    });
+    database.close();
+}
+
+async function loadHistoryImage(id) {
+    if (!id) return null;
+    const database = await openHistoryImageDb();
+    const blob = await new Promise((resolve, reject) => {
+        const request = database.transaction('images').objectStore('images').get(id);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error);
+    });
+    database.close();
+    return blob;
+}
+
+async function deleteHistoryImages(ids) {
+    if (!ids.length) return;
+    const database = await openHistoryImageDb();
+    await new Promise((resolve, reject) => {
+        const transaction = database.transaction('images', 'readwrite');
+        const store = transaction.objectStore('images');
+        for (const id of ids) store.delete(id);
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+    });
+    database.close();
+}
+
+function localDateKey() {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function readUsage() {
+    try {
+        const usage = JSON.parse(localStorage.getItem(USAGE_NAME) || '{}');
+        return usage.date === localDateKey() ? usage : { date: localDateKey(), counts: {} };
+    } catch {
+        return { date: localDateKey(), counts: {} };
+    }
+}
+
+function readModelLimits() {
+    try {
+        return JSON.parse(localStorage.getItem(MODEL_LIMIT_NAME) || '{}');
+    } catch {
+        return {};
+    }
+}
+
+function selectedModelLimit() {
+    return Number(readModelLimits()[modelSelect.value]) || 10;
+}
+
+function renderModelUsage() {
+    const usage = readUsage();
+    const count = Number(usage.counts?.[modelSelect.value]) || 0;
+    const limit = selectedModelLimit();
+    modelUsage.textContent = `오늘 요청: ${count} / ${limit}`;
+    modelLimit.value = String(limit);
+}
+
+function recordModelRequest(model) {
+    const usage = readUsage();
+    usage.counts[model] = (Number(usage.counts[model]) || 0) + 1;
+    localStorage.setItem(USAGE_NAME, JSON.stringify(usage));
+    renderModelUsage();
+}
+
+function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+    });
+}
+
+function bytesToBase64Url(bytes) {
+    let binary = '';
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    }
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function base64UrlToBytes(value) {
+    const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+    const binary = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '='));
+    return Uint8Array.from(binary, character => character.charCodeAt(0));
+}
 
 function readHistory() {
     try {
@@ -105,21 +227,38 @@ function renderHistory() {
         date.dateTime = entry.createdAt;
         date.textContent = new Date(entry.createdAt).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' });
         button.append(title, date);
+        if (entry.imageId) {
+            const photoLabel = document.createElement('small');
+            photoLabel.textContent = '사진 포함';
+            button.append(photoLabel);
+        }
         button.addEventListener('click', () => loadHistoryEntry(entry));
         item.append(button);
         historyList.append(item);
     }
 }
 
-function saveAnalysis(analysis) {
+async function saveAnalysis(analysis) {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const entry = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        id,
         createdAt: new Date().toISOString(),
         analysis,
+        imageId: currentImageBlob ? id : null,
         conversation: []
     };
     currentHistoryId = entry.id;
-    writeHistory([entry, ...readHistory()]);
+    const nextHistory = [entry, ...readHistory()];
+    const expiredImageIds = nextHistory.slice(HISTORY_LIMIT).map(item => item.imageId).filter(Boolean);
+    writeHistory(nextHistory);
+    deleteHistoryImages(expiredImageIds).catch(() => { });
+    if (currentImageBlob) {
+        try {
+            await saveHistoryImage(entry.imageId, currentImageBlob);
+        } catch {
+            historyStatus.textContent = '결과는 기록했지만 사진 저장에 실패했습니다.';
+        }
+    }
 }
 
 function updateCurrentConversation() {
@@ -181,15 +320,30 @@ if ([...modelSelect.options].some(option => option.value === storedModel)) model
 else modelSelect.value = DEFAULT_MODEL;
 const storedMode = localStorage.getItem(MODE_NAME);
 if ([...modeSelect.options].some(option => option.value === storedMode)) modeSelect.value = storedMode;
-modelSelect.addEventListener('change', () => localStorage.setItem(MODEL_NAME, modelSelect.value));
+modelSelect.addEventListener('change', () => {
+    localStorage.setItem(MODEL_NAME, modelSelect.value);
+    renderModelUsage();
+});
 modeSelect.addEventListener('change', () => localStorage.setItem(MODE_NAME, modeSelect.value));
+modelLimit.addEventListener('change', () => {
+    const limit = Math.max(1, Math.min(100000, Math.floor(Number(modelLimit.value) || 10)));
+    const limits = readModelLimits();
+    limits[modelSelect.value] = limit;
+    localStorage.setItem(MODEL_LIMIT_NAME, JSON.stringify(limits));
+    renderModelUsage();
+});
 document.querySelector('#clear-history').addEventListener('click', () => {
     if (!readHistory().length || !window.confirm('저장된 분석 기록을 모두 삭제할까요?')) return;
+    const imageIds = readHistory().map(entry => entry.imageId).filter(Boolean);
     localStorage.removeItem(HISTORY_NAME);
     currentHistoryId = null;
     historyStatus.textContent = '분석 기록을 삭제했습니다.';
     renderHistory();
+    deleteHistoryImages(imageIds).catch(() => {
+        historyStatus.textContent = '기록은 삭제했지만 일부 사진을 지우지 못했습니다.';
+    });
 });
+renderModelUsage();
 
 function selectResultTab(copySelected) {
     analysisTab.setAttribute('aria-selected', String(!copySelected));
@@ -300,36 +454,77 @@ document.querySelector('#followup-toggle').addEventListener('click', event => {
     if (!isOpen) followupInput.focus();
 });
 
+async function createShareImage(blob) {
+    const bitmap = await createImageBitmap(blob);
+    const scale = Math.min(1, 900 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    return new Promise((resolve, reject) => {
+        canvas.toBlob(blobResult => blobResult ? resolve(blobResult) : reject(new Error('이미지를 압축하지 못했습니다.')), 'image/jpeg', 0.62);
+    });
+}
+
 document.querySelector('#share-result').addEventListener('click', async () => {
-    const text = analysisAsText();
+    if (!currentAnalysis || !window.confirm('링크를 받은 사람은 분석한 사진과 결과를 볼 수 있습니다. 계속할까요?')) return;
+    resultActionStatus.textContent = '공유 링크를 준비하고 있습니다...';
     try {
-        if (navigator.share) await navigator.share({ title: currentAnalysis?.title || '스마트 비전 분석 결과', text });
-        else {
-            await navigator.clipboard.writeText(text);
-            resultActionStatus.textContent = '공유할 결과를 클립보드에 복사했습니다.';
+        const imageBlob = currentImageBlob ? await createShareImage(currentImageBlob) : null;
+        const payload = {
+            analysis: currentAnalysis,
+            conversation: currentConversation,
+            image: imageBlob ? await blobToDataUrl(imageBlob) : null
+        };
+        const encoded = bytesToBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
+        if (encoded.length > 1000000) throw new Error('이미지와 결과가 커서 링크로 공유하기 어렵습니다. 더 작은 사진을 사용해 주세요.');
+        const shareUrl = new URL(window.location.href);
+        shareUrl.hash = `share=${encoded}`;
+        if (window.SmartVisionNative?.shareUrl) {
+            window.SmartVisionNative.shareUrl(shareUrl.href);
+            resultActionStatus.textContent = '사진과 결과가 포함된 웹 링크를 공유했습니다.';
+        } else if (navigator.share) {
+            await navigator.share({ title: currentAnalysis.title || '스마트 비전 분석 결과', url: shareUrl.href });
+        } else {
+            await navigator.clipboard.writeText(shareUrl.href);
+            resultActionStatus.textContent = '사진과 결과가 포함된 웹 링크를 복사했습니다.';
         }
     } catch (error) {
-        if (error.name !== 'AbortError') resultActionStatus.textContent = '결과를 공유하지 못했습니다.';
+        if (error.name !== 'AbortError') resultActionStatus.textContent = error.message || '공유 링크를 만들지 못했습니다.';
     }
 });
 
-document.querySelector('#save-result').addEventListener('click', () => {
-    const file = new Blob([`\ufeff${analysisAsText()}`], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(file);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `smart-vision-${new Date().toISOString().slice(0, 10)}.txt`;
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    resultActionStatus.textContent = '분석 결과를 텍스트 파일로 저장했습니다.';
+document.querySelector('#save-result').addEventListener('click', async () => {
+    if (!currentAnalysis) return;
+    printTitle.textContent = currentAnalysis.title || '스마트 비전 분석 결과';
+    printCreatedAt.textContent = new Date().toLocaleString('ko-KR');
+    printResult.textContent = analysisAsText();
+    printImage.hidden = !currentImageBlob;
+    printImage.src = currentImageBlob ? await blobToDataUrl(currentImageBlob) : '';
+    printDocument.hidden = false;
+    const afterPrint = () => {
+        printDocument.hidden = true;
+        printImage.removeAttribute('src');
+    };
+    window.addEventListener('afterprint', afterPrint, { once: true });
+    if (window.SmartVisionNative?.printPdf) {
+        window.SmartVisionNative.printPdf();
+        resultActionStatus.textContent = 'Android 인쇄 화면에서 PDF로 저장을 선택해 주세요.';
+    } else {
+        window.print();
+        resultActionStatus.textContent = '인쇄 창에서 PDF로 저장을 선택해 주세요.';
+    }
 });
 
 async function requestModel(contents, generationConfig) {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelSelect.value}:generateContent`, {
+    const model = modelSelect.value;
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': localStorage.getItem(KEY_NAME) },
         body: JSON.stringify({ contents, ...(generationConfig ? { generationConfig } : {}) })
     });
+    recordModelRequest(model);
     const result = await response.json();
     if (!response.ok) throw new Error(`요청 실패 (${response.status}): ${result.error?.message || '키와 모델 권한을 확인해 주세요.'}`);
     return result.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('\n').trim() || '';
@@ -352,6 +547,7 @@ followupForm.addEventListener('submit', async event => {
         const answer = await requestModel([{ role: 'user', parts }]);
         currentConversation.push({ role: 'model', text: answer || '답변을 생성하지 못했습니다.' });
         appendConversationMessage('model', answer || '답변을 생성하지 못했습니다.');
+        if (!currentHistoryId) await saveAnalysis(currentAnalysis);
         updateCurrentConversation();
     } catch (error) {
         const message = `질문 처리 중 오류가 발생했습니다: ${error.message}`;
@@ -363,16 +559,63 @@ followupForm.addEventListener('submit', async event => {
     }
 });
 
-function loadHistoryEntry(entry) {
+async function loadHistoryEntry(entry) {
     currentAnalysis = entry.analysis;
-    currentImageData = null;
     currentHistoryId = entry.id;
     currentConversation = Array.isArray(entry.conversation) ? [...entry.conversation] : [];
+    currentImageBlob = await loadHistoryImage(entry.imageId);
+    currentImageData = currentImageBlob ? (await blobToDataUrl(currentImageBlob)).split(',')[1] : null;
+    selectedFile = currentImageBlob;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    preview.hidden = !currentImageBlob;
+    emptyPhoto.hidden = Boolean(currentImageBlob);
+    if (currentImageBlob) {
+        previewUrl = URL.createObjectURL(currentImageBlob);
+        preview.src = previewUrl;
+    }
+    analyzeButton.disabled = !currentImageBlob;
     closeDrawer();
     renderAnalysis(currentAnalysis);
 }
 
+async function restoreSharedResult() {
+    const shared = new URLSearchParams(window.location.hash.slice(1)).get('share');
+    if (!shared) return;
+    try {
+        const payload = JSON.parse(new TextDecoder().decode(base64UrlToBytes(shared)));
+        if (!payload.analysis || typeof payload.analysis !== 'object') throw new Error('공유된 분석 결과가 올바르지 않습니다.');
+        currentAnalysis = payload.analysis;
+        currentConversation = Array.isArray(payload.conversation) ? payload.conversation : [];
+        currentHistoryId = null;
+        currentImageBlob = null;
+        currentImageData = null;
+        if (typeof payload.image === 'string' && /^data:image\/(jpeg|png|webp);base64,/i.test(payload.image)) {
+            const [metadata, base64] = payload.image.split(',', 2);
+            const mimeType = metadata.match(/^data:([^;]+)/)?.[1] || 'image/jpeg';
+            currentImageBlob = new Blob([Uint8Array.from(atob(base64), character => character.charCodeAt(0))], { type: mimeType });
+            currentImageData = base64;
+            selectedFile = currentImageBlob;
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+            previewUrl = URL.createObjectURL(currentImageBlob);
+            preview.src = previewUrl;
+            preview.hidden = false;
+            emptyPhoto.hidden = true;
+            analyzeButton.disabled = false;
+        } else {
+            selectedFile = null;
+            preview.hidden = true;
+            emptyPhoto.hidden = false;
+            analyzeButton.disabled = true;
+        }
+        renderAnalysis(currentAnalysis);
+        resultActionStatus.textContent = '공유된 사진과 분석 결과를 불러왔습니다.';
+    } catch (error) {
+        resultActionStatus.textContent = `공유 링크를 불러오지 못했습니다: ${error.message}`;
+    }
+}
+
 renderHistory();
+restoreSharedResult();
 
 window.addEventListener('beforeinstallprompt', event => {
     event.preventDefault();
@@ -440,6 +683,7 @@ for (const input of [cameraInput, galleryInput]) {
         selectedFile = file;
         currentAnalysis = null;
         currentImageData = null;
+        currentImageBlob = null;
         currentHistoryId = null;
         currentConversation = [];
         resultActions.hidden = true;
@@ -464,7 +708,10 @@ async function imageData(file) {
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
     canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     bitmap.close();
-    return canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+    const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob(result => result ? resolve(result) : reject(new Error('사진을 변환하지 못했습니다.')), 'image/jpeg', 0.85);
+    });
+    return { data: (await blobToDataUrl(blob)).split(',')[1], blob };
 }
 
 analyzeButton.addEventListener('click', async () => {
@@ -478,20 +725,21 @@ analyzeButton.addEventListener('click', async () => {
     resultText.textContent = '사진을 분석하고 있습니다...';
     resultTabs.hidden = true;
     try {
-        const data = await imageData(selectedFile);
-        currentImageData = data;
+        const image = await imageData(selectedFile);
+        currentImageData = image.data;
+        currentImageBlob = image.blob;
         const responseText = await requestModel([{
             role: 'user',
             parts: [
                 { text: `${PROMPT}\n분석 모드: ${MODE_INSTRUCTIONS[modeSelect.value] || MODE_INSTRUCTIONS.auto}` },
-                { inline_data: { mime_type: 'image/jpeg', data } }
+                { inline_data: { mime_type: 'image/jpeg', data: image.data } }
             ]
         }], { responseMimeType: 'application/json', temperature: 0.2 });
         const jsonText = responseText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
         currentAnalysis = JSON.parse(jsonText);
         currentConversation = [];
         renderAnalysis(currentAnalysis);
-        saveAnalysis(currentAnalysis);
+        await saveAnalysis(currentAnalysis);
     } catch (error) {
         analysisPanel.hidden = false;
         copyPanel.hidden = true;

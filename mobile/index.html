@@ -42,12 +42,25 @@
             </select>
             <label for="model-select">Gemini 모델</label>
             <select id="model-select" class="drawer-select">
+                <option value="gemini-4-argon">Gemini 4 Argon</option>
+                <option value="gemini-3.8-flash">Gemini 3.8 Flash</option>
                 <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
+                <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite</option>
+                <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option>
                 <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite</option>
                 <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
             </select>
+            <div class="usage-panel">
+                <p id="model-usage" class="model-usage" role="status" aria-live="polite">오늘 요청: 0 / 10</p>
+                <label for="model-limit">표시 한도 (직접 설정)</label>
+                <input id="model-limit" class="drawer-number" type="number" min="1" max="100000" value="10">
+                <a class="quota-link" href="https://aistudio.google.com/rate-limit?hl=ko" target="_blank"
+                    rel="noopener noreferrer">Google AI Studio에서 실제 한도 확인</a>
+                <p class="drawer-note">이 수치는 이 기기의 요청 기록입니다. Google 프로젝트의 실제 사용량이나 한도와 다릅니다.</p>
+            </div>
             <button id="change-key" class="drawer-link" type="button">API 키 변경</button>
-            <p class="drawer-note">API 키는 이 기기의 브라우저 저장소에 보관됩니다.</p>
+            <p class="drawer-note">API 키는 이 기기의 브라우저 저장소에 보관됩니다. Gemini 2.5 모델은 신규 프로젝트에서 접근이 제한될 수 있습니다.</p>
         </section>
     </aside>
     <main>
@@ -88,7 +101,7 @@
             <div id="result-actions" class="result-actions" hidden>
                 <button id="followup-toggle" class="result-action" type="button" aria-expanded="false">이어 질문</button>
                 <button id="share-result" class="result-action" type="button">결과 공유</button>
-                <button id="save-result" class="result-action" type="button">결과 저장</button>
+                <button id="save-result" class="result-action" type="button">PDF 저장</button>
             </div>
             <p id="result-action-status" class="copy-status" role="status" aria-live="polite"></p>
             <section id="followup-panel" class="followup-panel" aria-label="분석 결과에 이어 질문하기" hidden>
@@ -106,6 +119,12 @@
             </div>
         </section>
     </main>
+    <article id="print-document" class="print-document" hidden>
+        <h1 id="print-title">스마트 비전 분석 결과</h1>
+        <p id="print-created-at" class="print-created-at"></p>
+        <img id="print-image" alt="분석한 사진">
+        <pre id="print-result" class="print-result"></pre>
+    </article>
     <dialog id="install-dialog" aria-labelledby="install-title">
         <div class="install-info">
             <h2 id="install-title">휴대폰에 설치</h2>

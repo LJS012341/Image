@@ -1,11 +1,15 @@
 package kr.co.smartvision.mobile;
 
 import android.content.ClipData;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.print.PrintAttributes;
+import android.print.PrintManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -37,9 +41,9 @@ public class MainActivity extends ComponentActivity {
                     if (result.getResultCode() == RESULT_OK) {
                         Intent data = result.getData();
                         if (data != null && data.getData() != null) {
-                            selectedUris = new Uri[]{data.getData()};
+                            selectedUris = new Uri[] { data.getData() };
                         } else if (cameraImageUri != null) {
-                            selectedUris = new Uri[]{cameraImageUri};
+                            selectedUris = new Uri[] { cameraImageUri };
                         }
                     }
                     if (filePathCallback != null) {
@@ -54,6 +58,7 @@ public class MainActivity extends ComponentActivity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(false);
+        webView.addJavascriptInterface(new PrintBridge(), "SmartVisionNative");
         setContentView(webView);
 
         Uri appUri = Uri.parse(BuildConfig.APP_URL);
@@ -99,8 +104,9 @@ public class MainActivity extends ComponentActivity {
                                 photoFile);
                         cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, cameraImageUri);
                         cameraIntent.setClipData(ClipData.newUri(getContentResolver(), "사진", cameraImageUri));
-                        cameraIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-                        chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, new Intent[]{cameraIntent});
+                        cameraIntent.addFlags(
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                        chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, new Intent[] { cameraIntent });
                     } catch (IOException exception) {
                         cameraImageUri = null;
                     }
@@ -111,6 +117,39 @@ public class MainActivity extends ComponentActivity {
             }
         });
         webView.loadUrl(BuildConfig.APP_URL);
+    }
+
+    private final class PrintBridge {
+        @JavascriptInterface
+        public void shareUrl(String url) {
+            if (url == null || !url.startsWith("https://")) {
+                return;
+            }
+            runOnUiThread(() -> {
+                Intent shareIntent = new Intent(Intent.ACTION_SEND);
+                shareIntent.setType("text/plain");
+                shareIntent.putExtra(Intent.EXTRA_TEXT, url);
+                startActivity(Intent.createChooser(shareIntent, "분석 결과 링크 공유"));
+            });
+        }
+
+        @JavascriptInterface
+        public void printPdf() {
+            runOnUiThread(() -> {
+                PrintManager printManager = (PrintManager) getSystemService(Context.PRINT_SERVICE);
+                if (printManager == null || webView == null) {
+                    return;
+                }
+                PrintAttributes attributes = new PrintAttributes.Builder()
+                        .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                        .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
+                        .build();
+                printManager.print(
+                        "Smart Vision 분석 결과",
+                        webView.createPrintDocumentAdapter("Smart Vision 분석 결과"),
+                        attributes);
+            });
+        }
     }
 
     @Override
