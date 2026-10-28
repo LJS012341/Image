@@ -51,6 +51,8 @@ const modeSelect = document.querySelector('#mode-select');
 const historyList = document.querySelector('#history-list');
 const historyCount = document.querySelector('#history-count');
 const historyStatus = document.querySelector('#history-status');
+const historyFilterAll = document.querySelector('#history-filter-all');
+const historyFilterFavorites = document.querySelector('#history-filter-favorites');
 const modelUsage = document.querySelector('#model-usage');
 const modelLimit = document.querySelector('#model-limit');
 const resultActions = document.querySelector('#result-actions');
@@ -72,6 +74,7 @@ let currentImageData = null;
 let currentImageBlob = null;
 let currentHistoryId = null;
 let currentConversation = [];
+let historyFilter = 'all';
 
 function openHistoryImageDb() {
     return new Promise((resolve, reject) => {
@@ -207,36 +210,83 @@ function writeHistory(history) {
 
 function renderHistory() {
     const history = readHistory();
+    const visibleHistory = historyFilter === 'favorites' ? history.filter(entry => entry.favorite) : history;
     historyCount.textContent = String(history.length);
     historyList.replaceChildren();
-    if (!history.length) {
+    if (!visibleHistory.length) {
         const empty = document.createElement('li');
         empty.className = 'history-empty';
-        empty.textContent = '저장된 분석이 없습니다.';
+        empty.textContent = history.length ? '즐겨찾기에 추가한 기록이 없습니다.' : '저장된 분석이 없습니다.';
         historyList.append(empty);
         return;
     }
-    for (const entry of history) {
+    for (const entry of visibleHistory) {
         const item = document.createElement('li');
-        const button = document.createElement('button');
-        button.className = 'history-item';
-        button.type = 'button';
+        item.className = 'history-row';
+        const favorite = document.createElement('button');
+        favorite.className = 'history-favorite';
+        favorite.type = 'button';
+        favorite.textContent = entry.favorite ? '★' : '☆';
+        favorite.setAttribute('aria-label', entry.favorite ? '즐겨찾기 해제' : '즐겨찾기 추가');
+        favorite.setAttribute('aria-pressed', String(Boolean(entry.favorite)));
+        favorite.addEventListener('click', () => {
+            const updatedHistory = readHistory();
+            const updatedEntry = updatedHistory.find(candidate => candidate.id === entry.id);
+            if (!updatedEntry) return;
+            updatedEntry.favorite = !updatedEntry.favorite;
+            writeHistory(updatedHistory);
+        });
+        const openButton = document.createElement('button');
+        openButton.className = 'history-item';
+        openButton.type = 'button';
         const title = document.createElement('span');
         title.textContent = entry.analysis?.title || '분석 결과';
         const date = document.createElement('time');
         date.dateTime = entry.createdAt;
         date.textContent = new Date(entry.createdAt).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' });
-        button.append(title, date);
+        openButton.append(title, date);
         if (entry.imageId) {
             const photoLabel = document.createElement('small');
             photoLabel.textContent = '사진 포함';
-            button.append(photoLabel);
+            openButton.append(photoLabel);
         }
-        button.addEventListener('click', () => loadHistoryEntry(entry));
-        item.append(button);
+        openButton.addEventListener('click', () => loadHistoryEntry(entry));
+        const removeButton = document.createElement('button');
+        removeButton.className = 'history-delete';
+        removeButton.type = 'button';
+        removeButton.textContent = '×';
+        removeButton.setAttribute('aria-label', `${title.textContent} 기록 삭제`);
+        removeButton.addEventListener('click', () => deleteHistoryEntry(entry.id));
+        item.append(favorite, openButton, removeButton);
         historyList.append(item);
     }
 }
+
+function deleteHistoryEntry(id) {
+    const history = readHistory();
+    const entry = history.find(item => item.id === id);
+    if (!entry || !window.confirm(`'${entry.analysis?.title || '분석 결과'}' 기록을 삭제할까요?`)) return;
+    writeHistory(history.filter(item => item.id !== id));
+    if (currentHistoryId === id) currentHistoryId = null;
+    if (entry.imageId) {
+        deleteHistoryImages([entry.imageId]).catch(() => {
+            historyStatus.textContent = '기록은 삭제했지만 사진 파일을 지우지 못했습니다.';
+        });
+    }
+}
+
+historyFilterAll.addEventListener('click', () => {
+    historyFilter = 'all';
+    historyFilterAll.setAttribute('aria-pressed', 'true');
+    historyFilterFavorites.setAttribute('aria-pressed', 'false');
+    renderHistory();
+});
+historyFilterFavorites.addEventListener('click', () => {
+    historyFilter = 'favorites';
+    historyFilterAll.setAttribute('aria-pressed', 'false');
+    historyFilterFavorites.setAttribute('aria-pressed', 'true');
+    renderHistory();
+});
 
 async function saveAnalysis(analysis) {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

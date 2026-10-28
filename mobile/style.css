@@ -241,10 +241,69 @@ input:focus-visible {
     list-style: none;
 }
 
+.history-filters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin-bottom: 10px;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: #e9efe7;
+}
+
+.history-filter {
+    min-height: 36px;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: #526b5f;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.history-filter[aria-pressed="true"] {
+    background: #fff;
+    color: var(--forest);
+    box-shadow: 0 1px 3px #173b3420;
+}
+
+.history-row {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) 34px;
+    align-items: stretch;
+    gap: 5px;
+}
+
+.history-favorite,
+.history-delete {
+    display: grid;
+    width: 34px;
+    min-height: 42px;
+    place-items: center;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: #fff;
+    color: #49675a;
+    font-size: 20px;
+}
+
+.history-favorite[aria-pressed="true"] {
+    border-color: #c9b95d;
+    background: #fbf5d9;
+    color: #8a6c12;
+}
+
+.history-delete {
+    color: #8e3b32;
+    font-size: 24px;
+}
+
 .history-item {
     display: grid;
     gap: 4px;
-    width: 100%;
+    min-width: 0;
     padding: 10px;
     border: 1px solid var(--line);
     border-radius: 4px;

@@ -26,6 +26,11 @@
         </div>
         <section class="drawer-section" aria-labelledby="history-heading">
             <h3 id="history-heading">분석 기록 <span id="history-count">0</span></h3>
+            <div class="history-filters" role="group" aria-label="분석 기록 필터">
+                <button id="history-filter-all" class="history-filter" type="button" aria-pressed="true">전체</button>
+                <button id="history-filter-favorites" class="history-filter" type="button"
+                    aria-pressed="false">즐겨찾기</button>
+            </div>
             <ol id="history-list" class="history-list"></ol>
             <p id="history-status" class="drawer-note" role="status"></p>
             <button id="clear-history" class="drawer-link danger-link" type="button">기록 전체 삭제</button>
