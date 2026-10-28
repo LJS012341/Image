@@ -504,28 +504,57 @@ document.querySelector('#followup-toggle').addEventListener('click', event => {
     if (!isOpen) followupInput.focus();
 });
 
-async function createShareImage(blob) {
-    const bitmap = await createImageBitmap(blob);
-    const scale = Math.min(1, 900 / Math.max(bitmap.width, bitmap.height));
+function createShareImageData() {
+    if (!currentImageBlob) return null;
+    if (!preview.complete || !preview.naturalWidth) {
+        return currentImageData ? `data:image/jpeg;base64,${currentImageData}` : null;
+    }
+    const scale = Math.min(1, 900 / Math.max(preview.naturalWidth, preview.naturalHeight));
     const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close();
+    canvas.width = Math.max(1, Math.round(preview.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(preview.naturalHeight * scale));
+    canvas.getContext('2d').drawImage(preview, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.62);
+}
+
+async function copyShareLink(url) {
+    try {
+        await navigator.clipboard.writeText(url);
+        return true;
+    } catch {
+        const temporaryInput = document.createElement('textarea');
+        temporaryInput.value = url;
+        temporaryInput.style.position = 'fixed';
+        temporaryInput.style.opacity = '0';
+        document.body.append(temporaryInput);
+        temporaryInput.select();
+        const copied = document.execCommand('copy');
+        temporaryInput.remove();
+        return copied;
+    }
+}
+
+function loadPdfLibrary() {
+    if (typeof window.html2pdf === 'function') return Promise.resolve();
     return new Promise((resolve, reject) => {
-        canvas.toBlob(blobResult => blobResult ? resolve(blobResult) : reject(new Error('이미지를 압축하지 못했습니다.')), 'image/jpeg', 0.62);
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.3/html2pdf.bundle.min.js';
+        script.onload = () => typeof window.html2pdf === 'function'
+            ? resolve()
+            : reject(new Error('PDF 기능을 초기화하지 못했습니다.'));
+        script.onerror = () => reject(new Error('PDF 기능을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.'));
+        document.head.append(script);
     });
 }
 
 document.querySelector('#share-result').addEventListener('click', async () => {
     if (!currentAnalysis || !window.confirm('링크를 받은 사람은 분석한 사진과 결과를 볼 수 있습니다. 계속할까요?')) return;
-    resultActionStatus.textContent = '공유 링크를 준비하고 있습니다...';
+    resultActionStatus.textContent = '';
     try {
-        const imageBlob = currentImageBlob ? await createShareImage(currentImageBlob) : null;
         const payload = {
             analysis: currentAnalysis,
             conversation: currentConversation,
-            image: imageBlob ? await blobToDataUrl(imageBlob) : null
+            image: createShareImageData()
         };
         const encoded = bytesToBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
         if (encoded.length > 1000000) throw new Error('이미지와 결과가 커서 링크로 공유하기 어렵습니다. 더 작은 사진을 사용해 주세요.');
@@ -535,10 +564,22 @@ document.querySelector('#share-result').addEventListener('click', async () => {
             window.SmartVisionNative.shareUrl(shareUrl.href);
             resultActionStatus.textContent = '사진과 결과가 포함된 웹 링크를 공유했습니다.';
         } else if (navigator.share) {
-            await navigator.share({ title: currentAnalysis.title || '스마트 비전 분석 결과', url: shareUrl.href });
+            try {
+                const shareRequest = navigator.share({ title: currentAnalysis.title || '스마트 비전 분석 결과', url: shareUrl.href });
+                await shareRequest;
+                resultActionStatus.textContent = '사진과 결과가 포함된 웹 링크를 공유했습니다.';
+            } catch (error) {
+                if (error.name === 'AbortError') return;
+                const copied = await copyShareLink(shareUrl.href);
+                resultActionStatus.textContent = copied
+                    ? '시스템 공유가 허용되지 않아 링크를 복사했습니다.'
+                    : '공유 권한이 거부됐고 링크 복사도 실패했습니다.';
+            }
         } else {
-            await navigator.clipboard.writeText(shareUrl.href);
-            resultActionStatus.textContent = '사진과 결과가 포함된 웹 링크를 복사했습니다.';
+            const copied = await copyShareLink(shareUrl.href);
+            resultActionStatus.textContent = copied
+                ? '사진과 결과가 포함된 웹 링크를 복사했습니다.'
+                : '링크를 복사하지 못했습니다. 브라우저 권한을 확인해 주세요.';
         }
     } catch (error) {
         if (error.name !== 'AbortError') resultActionStatus.textContent = error.message || '공유 링크를 만들지 못했습니다.';
@@ -547,23 +588,54 @@ document.querySelector('#share-result').addEventListener('click', async () => {
 
 document.querySelector('#save-result').addEventListener('click', async () => {
     if (!currentAnalysis) return;
-    printTitle.textContent = currentAnalysis.title || '스마트 비전 분석 결과';
-    printCreatedAt.textContent = new Date().toLocaleString('ko-KR');
-    printResult.textContent = analysisAsText();
-    printImage.hidden = !currentImageBlob;
-    printImage.src = currentImageBlob ? await blobToDataUrl(currentImageBlob) : '';
-    printDocument.hidden = false;
-    const afterPrint = () => {
+    const saveButton = document.querySelector('#save-result');
+    saveButton.disabled = true;
+    resultActionStatus.textContent = '사진과 분석 내용을 PDF로 만들고 있습니다...';
+    try {
+        await loadPdfLibrary();
+        printTitle.textContent = currentAnalysis.title || '스마트 비전 분석 결과';
+        printCreatedAt.textContent = new Date().toLocaleString('ko-KR');
+        printResult.textContent = analysisAsText();
+        printImage.hidden = !currentImageBlob;
+        printImage.src = currentImageBlob ? await blobToDataUrl(currentImageBlob) : '';
+        if (currentImageBlob) await printImage.decode();
+        printDocument.hidden = false;
+        printDocument.classList.add('pdf-exporting');
+        document.body.classList.add('pdf-export-mode');
+
+        const fileTitle = (currentAnalysis.title || 'analysis').replace(/[^a-zA-Z0-9가-힣_-]/g, '_').slice(0, 40);
+        const filename = `smart-vision-${new Date().toISOString().slice(0, 10)}-${fileTitle}.pdf`;
+        const pdfBlob = await window.html2pdf().set({
+            margin: [10, 10, 10, 10],
+            filename,
+            image: { type: 'jpeg', quality: 0.96 },
+            html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['css', 'legacy'] }
+        }).from(printDocument).toPdf().outputPdf('blob');
+
+        if (window.SmartVisionNative?.savePdf) {
+            const dataUrl = await blobToDataUrl(pdfBlob);
+            const savedLocation = window.SmartVisionNative.savePdf(dataUrl.split(',')[1], filename);
+            if (!savedLocation) throw new Error('PDF 파일을 Android 저장소에 기록하지 못했습니다.');
+            resultActionStatus.textContent = `PDF를 저장했습니다: ${savedLocation}`;
+        } else {
+            const url = URL.createObjectURL(pdfBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.click();
+            window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+            resultActionStatus.textContent = '사진과 분석 내용이 포함된 PDF를 다운로드했습니다.';
+        }
+    } catch (error) {
+        resultActionStatus.textContent = `PDF 저장 실패: ${error.message}`;
+    } finally {
         printDocument.hidden = true;
+        printDocument.classList.remove('pdf-exporting');
+        document.body.classList.remove('pdf-export-mode');
         printImage.removeAttribute('src');
-    };
-    window.addEventListener('afterprint', afterPrint, { once: true });
-    if (window.SmartVisionNative?.printPdf) {
-        window.SmartVisionNative.printPdf();
-        resultActionStatus.textContent = 'Android 인쇄 화면에서 PDF로 저장을 선택해 주세요.';
-    } else {
-        window.print();
-        resultActionStatus.textContent = '인쇄 창에서 PDF로 저장을 선택해 주세요.';
+        saveButton.disabled = false;
     }
 });
 

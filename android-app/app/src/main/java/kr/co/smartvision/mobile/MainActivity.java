@@ -1,14 +1,14 @@
 package kr.co.smartvision.mobile;
 
 import android.content.ClipData;
-import android.content.Context;
+import android.content.ContentValues;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
-import android.print.PrintAttributes;
-import android.print.PrintManager;
+import android.util.Base64;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -23,7 +23,9 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.FileProvider;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 
 public class MainActivity extends ComponentActivity {
     private WebView webView;
@@ -58,7 +60,7 @@ public class MainActivity extends ComponentActivity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(false);
-        webView.addJavascriptInterface(new PrintBridge(), "SmartVisionNative");
+        webView.addJavascriptInterface(new SmartVisionBridge(), "SmartVisionNative");
         setContentView(webView);
 
         Uri appUri = Uri.parse(BuildConfig.APP_URL);
@@ -119,7 +121,7 @@ public class MainActivity extends ComponentActivity {
         webView.loadUrl(BuildConfig.APP_URL);
     }
 
-    private final class PrintBridge {
+    private final class SmartVisionBridge {
         @JavascriptInterface
         public void shareUrl(String url) {
             if (url == null || !url.startsWith("https://")) {
@@ -134,21 +136,48 @@ public class MainActivity extends ComponentActivity {
         }
 
         @JavascriptInterface
-        public void printPdf() {
-            runOnUiThread(() -> {
-                PrintManager printManager = (PrintManager) getSystemService(Context.PRINT_SERVICE);
-                if (printManager == null || webView == null) {
-                    return;
+        public String savePdf(String encodedPdf, String filename) {
+            if (encodedPdf == null || filename == null || !filename.endsWith(".pdf")) {
+                return "";
+            }
+            String safeFilename = filename.replaceAll("[^A-Za-z0-9._-]", "_");
+            try {
+                byte[] pdfBytes = Base64.decode(encodedPdf, Base64.DEFAULT);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ContentValues values = new ContentValues();
+                    values.put(MediaStore.Downloads.DISPLAY_NAME, safeFilename);
+                    values.put(MediaStore.Downloads.MIME_TYPE, "application/pdf");
+                    values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Smart Vision");
+                    values.put(MediaStore.Downloads.IS_PENDING, 1);
+                    Uri fileUri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                    if (fileUri == null) {
+                        return "";
+                    }
+                    try (OutputStream outputStream = getContentResolver().openOutputStream(fileUri)) {
+                        if (outputStream == null) {
+                            getContentResolver().delete(fileUri, null, null);
+                            return "";
+                        }
+                        outputStream.write(pdfBytes);
+                    }
+                    values.clear();
+                    values.put(MediaStore.Downloads.IS_PENDING, 0);
+                    getContentResolver().update(fileUri, values, null, null);
+                    return "Downloads/Smart Vision/" + safeFilename;
                 }
-                PrintAttributes attributes = new PrintAttributes.Builder()
-                        .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
-                        .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
-                        .build();
-                printManager.print(
-                        "Smart Vision 분석 결과",
-                        webView.createPrintDocumentAdapter("Smart Vision 분석 결과"),
-                        attributes);
-            });
+
+                File downloads = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                if (downloads == null) {
+                    return "";
+                }
+                File pdfFile = new File(downloads, safeFilename);
+                try (FileOutputStream outputStream = new FileOutputStream(pdfFile)) {
+                    outputStream.write(pdfBytes);
+                }
+                return pdfFile.getAbsolutePath();
+            } catch (IOException | IllegalArgumentException exception) {
+                return "";
+            }
         }
     }
 

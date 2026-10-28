@@ -781,49 +781,60 @@ dialog input {
     font-size: 11px;
 }
 
-.print-document {
+.pdf-document {
     display: none;
 }
 
-@media print {
-    @page {
-        margin: 16mm;
-    }
+.pdf-document.pdf-exporting {
+    display: block;
+    width: min(calc(100vw - 24px), 190mm);
+    max-height: none;
+    margin: 0 auto;
+    padding: clamp(18px, 4vw, 36px);
+    overflow: visible;
+    background: #fff;
+    box-shadow: none;
+    color: #17241e;
+    font-family: 'Noto Sans KR', sans-serif;
+}
 
-    body> :not(.print-document) {
-        display: none !important;
-    }
+body.pdf-export-mode> :not(.pdf-document):not(.html2pdf__overlay) {
+    display: none !important;
+}
 
-    .print-document,
-    .print-document[hidden] {
-        display: block !important;
-        color: #17241e;
-        font-family: 'Noto Sans KR', sans-serif;
-    }
+.pdf-document h1 {
+    margin: 0 0 6mm;
+    color: #17241e;
+    font-size: 22pt;
+}
 
-    .print-document h1 {
-        margin: 0 0 6mm;
-        font-size: 22pt;
-    }
+.print-created-at {
+    margin: 0 0 8mm;
+    color: #52665a;
+    font-size: 9pt;
+}
 
-    .print-created-at {
-        margin: 0 0 8mm;
-        color: #52665a;
-        font-size: 9pt;
-    }
+.pdf-document img {
+    display: block;
+    max-width: 100%;
+    max-height: 115mm;
+    margin: 0 auto 9mm;
+    object-fit: contain;
+}
 
-    .print-document img {
-        display: block;
-        max-width: 100%;
-        max-height: 115mm;
-        margin: 0 auto 9mm;
-        object-fit: contain;
-    }
+.print-result {
+    margin: 0;
+    color: #17241e;
+    font: 10.5pt/1.65 'Noto Sans KR', sans-serif;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
 
-    .print-result {
-        margin: 0;
-        font: 10.5pt/1.65 'Noto Sans KR', sans-serif;
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-    }
+.pdf-exporting .print-result {
+    page-break-inside: auto;
+}
+
+.pdf-exporting img,
+.pdf-exporting h1 {
+    page-break-inside: avoid;
 }
