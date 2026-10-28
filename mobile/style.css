@@ -95,7 +95,7 @@ input:focus-visible {
     z-index: 21;
     top: 0;
     right: 0;
-    width: min(66vw, 460px);
+    width: min(75vw, 460px);
     min-width: 0;
     height: 100vh;
     height: 100dvh;
