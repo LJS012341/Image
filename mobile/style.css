@@ -626,12 +626,41 @@ h2 {
 }
 
 .conversation-message.user {
+    grid-template-columns: minmax(0, 1fr) 28px;
     background: #dcebe0;
 }
 
 .conversation-message strong {
     color: var(--forest);
     font-size: 12px;
+}
+
+.conversation-delete {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    grid-column: 2;
+    grid-row: 1;
+    place-items: center;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: #64766a;
+    font-size: 19px;
+    line-height: 1;
+    transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+}
+
+.conversation-delete:hover:not(:disabled) {
+    border-color: #dfb4aa;
+    background: #fff8f6;
+    color: #984b40;
+}
+
+.conversation-delete:disabled {
+    cursor: wait;
+    opacity: .4;
 }
 
 .followup-form {
@@ -1505,6 +1534,16 @@ html[data-theme="dark"] .conversation-message {
 
 html[data-theme="dark"] .conversation-message.user {
     background: #2b4234;
+}
+
+html[data-theme="dark"] .conversation-delete {
+    color: #b6c7ba;
+}
+
+html[data-theme="dark"] .conversation-delete:hover:not(:disabled) {
+    border-color: #8e5a52;
+    background: #3b2926;
+    color: #ffc1b4;
 }
 
 html[data-theme="dark"] .conversation-heading h3 {
