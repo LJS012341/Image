@@ -43,7 +43,16 @@
             <button id="close-menu" class="drawer-close" type="button" aria-label="메뉴 닫기">×</button>
         </div>
         <section class="drawer-section" aria-labelledby="history-heading">
-            <h3 id="history-heading">분석 기록 <span id="history-count">0</span></h3>
+            <div class="history-heading-row">
+                <h3 id="history-heading">분석 기록 <span id="history-count">0</span></h3>
+                <form id="history-search-form" class="history-search" role="search" aria-label="분석 기록 검색">
+                    <input id="history-search-input" class="history-search-input" type="search" placeholder="기록 검색"
+                        aria-label="분석 기록 검색어" aria-hidden="true" tabindex="-1" enterkeyhint="search"
+                        autocomplete="off">
+                    <button id="history-search-toggle" class="history-search-toggle" type="button" aria-label="검색창 열기"
+                        aria-expanded="false"><span class="search-icon" aria-hidden="true"></span></button>
+                </form>
+            </div>
             <div class="history-filters" role="group" aria-label="분석 기록 필터">
                 <button id="history-filter-all" class="history-filter" type="button" aria-pressed="true">전체</button>
                 <button id="history-filter-favorites" class="history-filter" type="button"
@@ -51,26 +60,37 @@
             </div>
             <ol id="history-list" class="history-list"></ol>
             <p id="history-status" class="drawer-note" role="status"></p>
-            <button id="clear-history" class="drawer-link danger-link" type="button">기록 전체 삭제</button>
+            <button id="clear-history" class="drawer-link danger-link" type="button"><span class="trash-icon"
+                    aria-hidden="true"></span>기록 전체 삭제</button>
         </section>
         <section class="drawer-section" aria-labelledby="analysis-settings-heading">
             <h3 id="analysis-settings-heading">분석 설정</h3>
-            <label for="mode-select">분석 모드</label>
-            <select id="mode-select" class="drawer-select">
-                <option value="auto">자동 분류</option>
-                <option value="animal">동물</option>
-                <option value="object">물건</option>
-                <option value="food">음식</option>
-                <option value="text">글씨 읽기</option>
-            </select>
-            <label for="model-select">Gemini 모델</label>
-            <select id="model-select" class="drawer-select">
-                <option value="gemini-4-argon">Gemini 4 Argon</option>
-                <option value="gemini-3.8-flash">Gemini 3.8 Flash</option>
-                <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
-                <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite</option>
-                <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option>
-            </select>
+            <div class="settings-field">
+                <label for="mode-select">분석 모드</label>
+                <div class="select-wrap">
+                    <select id="mode-select" class="drawer-select">
+                        <option value="auto">자동 분류</option>
+                        <option value="animal">동물</option>
+                        <option value="object">물건</option>
+                        <option value="food">음식</option>
+                        <option value="text">글씨 읽기</option>
+                    </select>
+                    <span class="select-chevron" aria-hidden="true"></span>
+                </div>
+            </div>
+            <div class="settings-field">
+                <label for="model-select">Gemini 모델</label>
+                <div class="select-wrap">
+                    <select id="model-select" class="drawer-select">
+                        <option value="gemini-4-argon">Gemini 4 Argon</option>
+                        <option value="gemini-3.8-flash">Gemini 3.8 Flash</option>
+                        <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
+                        <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite</option>
+                        <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option>
+                    </select>
+                    <span class="select-chevron" aria-hidden="true"></span>
+                </div>
+            </div>
             <div class="usage-panel">
                 <p id="model-usage" class="model-usage" role="status" aria-live="polite">오늘 요청: 0 / 10</p>
                 <label for="model-limit">표시 한도 (직접 설정)</label>

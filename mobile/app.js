@@ -60,6 +60,9 @@ const historyCount = document.querySelector('#history-count');
 const historyStatus = document.querySelector('#history-status');
 const historyFilterAll = document.querySelector('#history-filter-all');
 const historyFilterFavorites = document.querySelector('#history-filter-favorites');
+const historySearchForm = document.querySelector('#history-search-form');
+const historySearchInput = document.querySelector('#history-search-input');
+const historySearchToggle = document.querySelector('#history-search-toggle');
 const modelUsage = document.querySelector('#model-usage');
 const modelLimit = document.querySelector('#model-limit');
 const resultActions = document.querySelector('#result-actions');
@@ -77,6 +80,7 @@ let currentImageBlob = null;
 let currentHistoryId = null;
 let currentConversation = [];
 let historyFilter = 'all';
+let historySearchQuery = '';
 let isAnalyzing = false;
 let drawerTouch = null;
 
@@ -249,13 +253,32 @@ function writeHistory(history) {
 
 function renderHistory() {
     const history = readHistory();
-    const visibleHistory = historyFilter === 'favorites' ? history.filter(entry => entry.favorite) : history;
+    let visibleHistory = historyFilter === 'favorites' ? history.filter(entry => entry.favorite) : history;
+    if (historySearchQuery) {
+        visibleHistory = visibleHistory.filter(entry => {
+            const analysis = entry.analysis || {};
+            const searchableText = [
+                analysis.title,
+                analysis.summary,
+                analysis.category,
+                analysis.recognized_text,
+                ...(Array.isArray(analysis.details)
+                    ? analysis.details.flatMap(detail => [detail?.label, detail?.value])
+                    : [])
+            ].filter(Boolean).join(' ').toLocaleLowerCase();
+            return searchableText.includes(historySearchQuery);
+        });
+    }
     historyCount.textContent = String(history.length);
     historyList.replaceChildren();
     if (!visibleHistory.length) {
         const empty = document.createElement('li');
         empty.className = 'history-empty';
-        empty.textContent = history.length ? '즐겨찾기에 추가한 기록이 없습니다.' : '저장된 분석이 없습니다.';
+        empty.textContent = historySearchQuery
+            ? '검색 결과가 없습니다.'
+            : historyFilter === 'favorites' && history.length
+                ? '즐겨찾기에 추가한 기록이 없습니다.'
+                : '저장된 분석이 없습니다.';
         historyList.append(empty);
         return;
     }
@@ -300,6 +323,51 @@ function renderHistory() {
         historyList.append(item);
     }
 }
+
+function closeHistorySearch() {
+    historySearchForm.classList.remove('is-open');
+    historySearchInput.value = '';
+    historySearchInput.setAttribute('aria-hidden', 'true');
+    historySearchInput.tabIndex = -1;
+    historySearchToggle.setAttribute('aria-expanded', 'false');
+    historySearchToggle.setAttribute('aria-label', '검색창 열기');
+    historySearchQuery = '';
+}
+
+historySearchToggle.addEventListener('click', () => {
+    if (!historySearchForm.classList.contains('is-open')) {
+        historySearchForm.classList.add('is-open');
+        historySearchInput.setAttribute('aria-hidden', 'false');
+        historySearchInput.tabIndex = 0;
+        historySearchToggle.setAttribute('aria-expanded', 'true');
+        historySearchToggle.setAttribute('aria-label', '검색 실행');
+        historySearchInput.focus();
+        return;
+    }
+    if (historySearchInput.value.trim()) {
+        historySearchForm.requestSubmit();
+        return;
+    }
+    closeHistorySearch();
+    renderHistory();
+});
+
+historySearchForm.addEventListener('submit', event => {
+    event.preventDefault();
+    historySearchQuery = historySearchInput.value.trim().toLocaleLowerCase();
+    renderHistory();
+    historySearchInput.blur();
+});
+
+historySearchInput.addEventListener('keydown', event => {
+    if (event.key === 'Enter' && !event.isComposing) {
+        event.preventDefault();
+        historySearchForm.requestSubmit();
+    } else if (event.key === 'Escape') {
+        closeHistorySearch();
+        renderHistory();
+    }
+});
 
 function deleteHistoryEntry(id) {
     const history = readHistory();
