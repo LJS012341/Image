@@ -1,4 +1,4 @@
-const CACHE = 'smart-vision-v15';
+const CACHE = 'smart-vision-v16';
 const ASSETS = ['./', './index.html', './style.css', './app.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', event => {
     event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)));

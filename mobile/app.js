@@ -1162,7 +1162,16 @@ followupForm.addEventListener('submit', async event => {
 async function loadHistoryEntry(entry) {
     currentAnalysis = entry.analysis;
     currentHistoryId = entry.id;
-    currentConversation = Array.isArray(entry.conversation) ? [...entry.conversation] : [];
+    let conversationWasCleaned = false;
+    currentConversation = Array.isArray(entry.conversation)
+        ? entry.conversation.map(message => {
+            if (message.role !== 'model' || typeof message.text !== 'string') return message;
+            const text = cleanFollowupAnswer(message.text);
+            if (text === message.text) return message;
+            conversationWasCleaned = true;
+            return { ...message, text };
+        })
+        : [];
     currentImageBlob = await loadHistoryImage(entry.imageId);
     currentImageData = currentImageBlob ? (await blobToDataUrl(currentImageBlob)).split(',')[1] : null;
     selectedFile = currentImageBlob;
@@ -1180,6 +1189,7 @@ async function loadHistoryEntry(entry) {
     analyzeButton.disabled = !currentImageBlob;
     closeDrawer();
     renderAnalysis(currentAnalysis);
+    if (conversationWasCleaned) updateCurrentConversation();
 }
 
 renderHistory();

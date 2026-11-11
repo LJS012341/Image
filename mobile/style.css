@@ -630,6 +630,16 @@ h2 {
     background: #dcebe0;
 }
 
+.conversation-message.user>strong {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.conversation-message.user>span {
+    grid-column: 1 / -1;
+    grid-row: 2;
+}
+
 .conversation-message strong {
     color: var(--forest);
     font-size: 12px;
