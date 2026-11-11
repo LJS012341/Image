@@ -169,7 +169,17 @@
             </div>
             <p id="result-action-status" class="copy-status" role="status" aria-live="polite"></p>
             <section id="followup-panel" class="followup-panel" aria-label="분석 결과에 이어 질문하기" hidden>
-                <div id="conversation" class="conversation" aria-live="polite"></div>
+                <div id="conversation-history" class="conversation-history" hidden>
+                    <div class="conversation-heading">
+                        <div>
+                            <p class="eyebrow">FOLLOW-UP / Q&amp;A</p>
+                            <h3>추가 질문에 대한 답변 <span id="conversation-count"></span></h3>
+                        </div>
+                        <button id="conversation-expand" class="conversation-expand" type="button" aria-expanded="false"
+                            hidden>더 보기</button>
+                    </div>
+                    <div id="conversation" class="conversation" aria-live="polite"></div>
+                </div>
                 <form id="followup-form" class="followup-form">
                     <label class="visually-hidden" for="followup-input">질문</label>
                     <input id="followup-input" type="text" maxlength="500" placeholder="이 결과에 대해 더 물어보세요" required>

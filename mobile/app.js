@@ -89,6 +89,9 @@ const followupPanel = document.querySelector('#followup-panel');
 const followupForm = document.querySelector('#followup-form');
 const followupInput = document.querySelector('#followup-input');
 const conversation = document.querySelector('#conversation');
+const conversationHistory = document.querySelector('#conversation-history');
+const conversationCount = document.querySelector('#conversation-count');
+const conversationExpand = document.querySelector('#conversation-expand');
 let selectedFile = null;
 let previewUrl = null;
 let installPrompt = null;
@@ -547,7 +550,32 @@ function updateCurrentConversation() {
     writeHistory(history);
 }
 
-function appendConversationMessage(role, text) {
+function updateConversationHistory(resetExpansion = false) {
+    const questionCount = currentConversation.filter(message => message.role === 'user').length;
+    const hasConversation = currentConversation.length > 0;
+    conversationCount.textContent = questionCount ? `(${questionCount})` : '';
+    conversationHistory.hidden = !hasConversation;
+    conversationExpand.hidden = true;
+
+    if (resetExpansion) {
+        conversation.classList.remove('is-expanded');
+        conversationExpand.setAttribute('aria-expanded', 'false');
+        conversationExpand.textContent = '더 보기';
+    }
+    if (!hasConversation) return;
+
+    requestAnimationFrame(() => {
+        const hasOverflow = conversation.scrollHeight > conversation.clientHeight + 1;
+        conversationExpand.hidden = !hasOverflow;
+        if (!hasOverflow) {
+            conversation.classList.remove('is-expanded');
+            conversationExpand.setAttribute('aria-expanded', 'false');
+            conversationExpand.textContent = '더 보기';
+        }
+    });
+}
+
+function appendConversationMessage(role, text, updateHistory = true) {
     const message = document.createElement('p');
     message.className = `conversation-message ${role}`;
     const label = document.createElement('strong');
@@ -556,12 +584,21 @@ function appendConversationMessage(role, text) {
     content.textContent = text;
     message.append(label, content);
     conversation.append(message);
+    if (updateHistory) updateConversationHistory();
 }
 
 function renderConversation() {
     conversation.replaceChildren();
-    for (const message of currentConversation) appendConversationMessage(message.role, message.text);
+    conversationHistory.hidden = !currentConversation.length;
+    for (const message of currentConversation) appendConversationMessage(message.role, message.text, false);
+    updateConversationHistory(true);
 }
+
+conversationExpand.addEventListener('click', () => {
+    const expanded = conversation.classList.toggle('is-expanded');
+    conversationExpand.setAttribute('aria-expanded', String(expanded));
+    conversationExpand.textContent = expanded ? '접기' : '더 보기';
+});
 
 function openDrawer() {
     settingsDrawer.style.transform = '';
@@ -772,8 +809,10 @@ function renderAnalysis(analysis) {
     copyStatus.textContent = '';
     selectResultTab(false);
     resultActions.hidden = false;
-    followupPanel.hidden = true;
-    document.querySelector('#followup-toggle').setAttribute('aria-expanded', 'false');
+    const followupToggle = document.querySelector('#followup-toggle');
+    followupPanel.hidden = currentConversation.length === 0;
+    followupToggle.setAttribute('aria-expanded', String(!followupPanel.hidden));
+    followupToggle.textContent = currentConversation.length ? '대화 접기' : '이어 질문';
     renderConversation();
 }
 
@@ -793,7 +832,10 @@ document.querySelector('#followup-toggle').addEventListener('click', event => {
     const isOpen = !followupPanel.hidden;
     followupPanel.hidden = isOpen;
     event.currentTarget.setAttribute('aria-expanded', String(!isOpen));
-    if (!isOpen) followupInput.focus();
+    event.currentTarget.textContent = isOpen
+        ? currentConversation.length ? '대화 보기' : '이어 질문'
+        : currentConversation.length ? '대화 접기' : '이어 질문 닫기';
+    if (!isOpen && !currentConversation.length) followupInput.focus();
 });
 
 let pdfLibraryPromise;
@@ -843,7 +885,7 @@ function wrapPdfText(context, text, maxWidth) {
     return lines;
 }
 
-async function createAnalysisPdf(analysis, imageBlob) {
+async function createAnalysisPdf(analysis, imageBlob, conversationMessages = []) {
     const JsPDF = await loadPdfLibrary();
     const pdf = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
     const pageWidth = 1240;
@@ -923,6 +965,43 @@ async function createAnalysisPdf(analysis, imageBlob) {
         }
         y += lineHeight / 2;
     }
+
+    if (conversationMessages.length) {
+        const sectionTitle = '추가 질문에 대한 답변';
+        const headingLines = wrapPdfText(context, sectionTitle, contentWidth);
+        context.fillStyle = '#17241e';
+        context.font = '700 34px sans-serif';
+        y += 14;
+        for (const line of headingLines) {
+            if (y + 44 > pageHeight - margin) {
+                savePage();
+                beginPage();
+                context.fillStyle = '#17241e';
+                context.font = '700 34px sans-serif';
+            }
+            context.fillText(line, margin, y);
+            y += 44;
+        }
+        y += 10;
+
+        for (const message of conversationMessages) {
+            const label = message.role === 'user' ? '질문' : '답변';
+            const lines = wrapPdfText(context, `${label}: ${message.text}`, contentWidth);
+            context.font = '30px sans-serif';
+            context.fillStyle = '#17241e';
+            for (const line of lines) {
+                if (y + lineHeight > pageHeight - margin) {
+                    savePage();
+                    beginPage();
+                    context.font = '30px sans-serif';
+                    context.fillStyle = '#17241e';
+                }
+                if (line) context.fillText(line, margin, y);
+                y += lineHeight;
+            }
+            y += lineHeight / 2;
+        }
+    }
     savePage();
 
     const blob = pdf.output('blob');
@@ -937,12 +1016,17 @@ document.querySelector('#save-result').addEventListener('click', async () => {
     if (!currentAnalysis) return;
     const saveButton = document.querySelector('#save-result');
     saveButton.disabled = true;
-    resultActionStatus.textContent = '사진과 분석 내용을 PDF로 만들고 있습니다...';
+    const analysisToSave = currentAnalysis;
+    const imageToSave = currentImageBlob;
+    const conversationToSave = currentConversation.map(message => ({ ...message }));
+    resultActionStatus.textContent = conversationToSave.length
+        ? '사진, 분석 내용과 이어질문을 PDF로 만들고 있습니다...'
+        : '사진과 분석 내용을 PDF로 만들고 있습니다...';
     try {
         await loadPdfLibrary();
-        const fileTitle = (currentAnalysis.title || 'analysis').replace(/[^a-zA-Z0-9가-힣_-]/g, '_').slice(0, 40);
+        const fileTitle = (analysisToSave.title || 'analysis').replace(/[^a-zA-Z0-9가-힣_-]/g, '_').slice(0, 40);
         const filename = `smart-vision-${new Date().toISOString().slice(0, 10)}-${fileTitle}.pdf`;
-        const pdfBlob = await createAnalysisPdf(currentAnalysis, currentImageBlob);
+        const pdfBlob = await createAnalysisPdf(analysisToSave, imageToSave, conversationToSave);
 
         if (window.SmartVisionNative?.savePdf) {
             const dataUrl = await blobToDataUrl(pdfBlob);
@@ -956,7 +1040,9 @@ document.querySelector('#save-result').addEventListener('click', async () => {
             link.download = filename;
             link.click();
             window.setTimeout(() => URL.revokeObjectURL(url), 30000);
-            resultActionStatus.textContent = '사진과 분석 내용이 포함된 PDF를 다운로드했습니다.';
+            resultActionStatus.textContent = conversationToSave.length
+                ? '사진, 분석 내용과 이어질문이 포함된 PDF를 다운로드했습니다.'
+                : '사진과 분석 내용이 포함된 PDF를 다운로드했습니다.';
         }
     } catch (error) {
         resultActionStatus.textContent = `PDF 저장 실패: ${error.message}`;
