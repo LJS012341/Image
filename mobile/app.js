@@ -31,6 +31,10 @@ const cameraInput = document.querySelector('#camera-input');
 const galleryInput = document.querySelector('#gallery-input');
 const preview = document.querySelector('#preview');
 const emptyPhoto = document.querySelector('#empty-photo');
+const photoArea = document.querySelector('#photo-area');
+const photoCaption = document.querySelector('#photo-caption');
+const photoName = document.querySelector('#photo-name');
+const photoType = document.querySelector('#photo-type');
 const analyzeButton = document.querySelector('#analyze');
 const resultText = document.querySelector('#result-text');
 const resultTabs = document.querySelector('#result-tabs');
@@ -706,9 +710,13 @@ async function loadHistoryEntry(entry) {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     preview.hidden = !currentImageBlob;
     emptyPhoto.hidden = Boolean(currentImageBlob);
+    photoArea.classList.toggle('has-photo', Boolean(currentImageBlob));
+    photoCaption.hidden = !currentImageBlob;
     if (currentImageBlob) {
         previewUrl = URL.createObjectURL(currentImageBlob);
         preview.src = previewUrl;
+        photoName.textContent = entry.analysis?.title || '저장된 사진';
+        photoType.textContent = currentImageBlob.type.split('/')[1]?.toUpperCase() || 'IMAGE';
     }
     analyzeButton.disabled = !currentImageBlob;
     closeDrawer();
@@ -794,6 +802,10 @@ for (const input of [cameraInput, galleryInput]) {
         preview.src = previewUrl;
         preview.hidden = false;
         emptyPhoto.hidden = true;
+        photoArea.classList.add('has-photo');
+        photoCaption.hidden = false;
+        photoName.textContent = file.name;
+        photoType.textContent = file.type.split('/')[1]?.toUpperCase() || 'IMAGE';
         analyzeButton.disabled = false;
         resultText.textContent = '사진이 준비됐습니다.';
         input.value = '';

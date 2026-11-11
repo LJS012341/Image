@@ -17,12 +17,17 @@
         <div class="brand"><span class="brand-mark">◎</span><span>스마트 비전</span></div>
         <div class="header-actions"><button id="install-button" class="quiet" type="button" hidden>앱 설치</button><button
                 id="menu-toggle" class="menu-toggle" type="button" aria-label="메뉴 열기" aria-expanded="false"
-                aria-controls="settings-drawer">三</button></div>
+                aria-controls="settings-drawer"><span class="menu-icon"
+                    aria-hidden="true"><i></i><i></i><i></i></span></button></div>
     </header>
     <button id="drawer-backdrop" class="drawer-backdrop" type="button" aria-label="메뉴 닫기" hidden></button>
     <aside id="settings-drawer" class="settings-drawer" aria-label="앱 메뉴" aria-hidden="true" inert>
         <div class="drawer-heading">
-            <h2>메뉴</h2><button id="close-menu" class="drawer-close" type="button" aria-label="메뉴 닫기">×</button>
+            <div>
+                <p class="drawer-kicker">SMART VISION</p>
+                <h2>메뉴</h2>
+            </div>
+            <button id="close-menu" class="drawer-close" type="button" aria-label="메뉴 닫기">×</button>
         </div>
         <section class="drawer-section" aria-labelledby="history-heading">
             <h3 id="history-heading">분석 기록 <span id="history-count">0</span></h3>
@@ -65,15 +70,27 @@
             <p class="drawer-note">API 키는 이 기기의 브라우저 저장소에 보관됩니다.</p>
         </section>
     </aside>
-    <main>
-        <section class="workspace" aria-label="사진 분석">
-            <div class="section-title"><span class="eyebrow">VISION / 01</span>
-                <h1>무엇을 알아볼까요?</h1>
+    <section class="page-heading" aria-labelledby="page-title">
+        <div>
+            <p class="eyebrow">VISION / WORKSPACE</p>
+            <h1 id="page-title">무엇을 알아볼까요?</h1>
+        </div>
+        <p class="heading-note">사진 속 대상을 확인하고 필요한 정보를 한눈에 살펴보세요.</p>
+    </section>
+    <main class="app-layout">
+        <section class="workspace panel photo-panel" aria-label="사진 분석">
+            <div class="panel-heading section-title">
+                <h2>분석할 사진</h2><span class="step">01 / IMAGE</span>
             </div>
             <div class="photo-area" id="photo-area">
                 <img id="preview" alt="선택한 사진 미리보기" hidden>
-                <div id="empty-photo" class="empty-photo"><span class="photo-symbol">▣</span>
+                <div class="photo-shade" aria-hidden="true"></div>
+                <div id="empty-photo" class="empty-photo"><span class="photo-symbol" aria-hidden="true">▧</span>
                     <p>분석할 사진을 선택하세요</p>
+                </div>
+                <div id="photo-caption" class="photo-caption" hidden>
+                    <div><strong id="photo-name"></strong><span>사진 미리보기</span></div>
+                    <span id="photo-type" class="photo-type">이미지</span>
                 </div>
             </div>
             <div class="actions">
@@ -87,9 +104,12 @@
             <button id="analyze" type="button" class="primary" disabled>정보 분석하기 <span
                     aria-hidden="true">↗</span></button>
         </section>
-        <section class="result" aria-live="polite" aria-label="분석 결과">
-            <div class="result-title"><span class="eyebrow">RESULT / 02</span>
-                <h2>분석 결과</h2>
+        <section class="result panel result-panel" aria-live="polite" aria-label="분석 결과">
+            <div class="result-title">
+                <div>
+                    <p class="eyebrow">RESULT / 02</p>
+                    <h2>분석 결과</h2>
+                </div>
             </div>
             <div id="result-tabs" class="result-tabs" role="tablist" aria-label="분석 결과 보기" hidden>
                 <button id="analysis-tab" class="result-tab" type="button" role="tab" aria-selected="true">분석
@@ -98,7 +118,7 @@
                     복사</button>
             </div>
             <div id="analysis-panel" role="tabpanel" aria-labelledby="analysis-tab">
-                <div id="result-text" class="result-body">분석 결과가 이곳에 표시됩니다.</div>
+                <div id="result-text" class="result-body">사진을 선택하면 분석 결과가 여기에 표시됩니다.</div>
             </div>
             <div id="result-actions" class="result-actions" hidden>
                 <button id="followup-toggle" class="result-action" type="button" aria-expanded="false">이어 질문</button>
