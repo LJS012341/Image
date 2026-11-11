@@ -8,17 +8,31 @@
     <meta name="description" content="사진을 촬영하거나 선택해 물건과 생물을 분석합니다.">
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="icon" href="./icon-192.png">
+    <script>
+        try {
+            document.documentElement.dataset.theme = localStorage.getItem('smart-vision-theme') === 'dark' ? 'dark' : 'light';
+        } catch { }
+    </script>
     <link rel="stylesheet" href="./style.css">
     <title>스마트 비전</title>
 </head>
 
 <body>
     <header class="topbar">
-        <div class="brand"><span class="brand-mark">◎</span><span>스마트 비전</span></div>
-        <div class="header-actions"><button id="install-button" class="quiet" type="button" hidden>앱 설치</button><button
-                id="menu-toggle" class="menu-toggle" type="button" aria-label="메뉴 열기" aria-expanded="false"
+        <div class="brand"><button id="home-button" class="brand-mark" type="button" aria-label="홈으로 초기화"
+                title="홈으로 초기화">◎</button><span>스마트 비전</span></div>
+        <div class="header-actions"><button id="install-button" class="quiet" type="button" hidden>앱 설치</button>
+            <div class="theme-switch" role="group" aria-label="화면 테마" data-theme="light">
+                <span class="theme-switch-thumb" aria-hidden="true"></span>
+                <button id="theme-light" class="theme-option" type="button" aria-label="라이트 모드" title="라이트 모드"
+                    aria-pressed="true">☀</button>
+                <button id="theme-dark" class="theme-option" type="button" aria-label="다크 모드" title="다크 모드"
+                    aria-pressed="false">☾</button>
+            </div>
+            <button id="menu-toggle" class="menu-toggle" type="button" aria-label="메뉴 열기" aria-expanded="false"
                 aria-controls="settings-drawer"><span class="menu-icon"
-                    aria-hidden="true"><i></i><i></i><i></i></span></button></div>
+                    aria-hidden="true"><i></i><i></i><i></i></span></button>
+        </div>
     </header>
     <button id="drawer-backdrop" class="drawer-backdrop" type="button" aria-label="메뉴 닫기" hidden></button>
     <aside id="settings-drawer" class="settings-drawer" aria-label="앱 메뉴" aria-hidden="true" inert>

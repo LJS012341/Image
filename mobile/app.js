@@ -1,4 +1,5 @@
 const KEY_NAME = 'smart-vision-gemini-key';
+const THEME_NAME = 'smart-vision-theme';
 const MODEL_NAME = 'smart-vision-gemini-model';
 const MODE_NAME = 'smart-vision-analysis-mode';
 const HISTORY_NAME = 'smart-vision-analysis-history';
@@ -27,6 +28,10 @@ const CONFIDENCE_LABELS = { high: '높음', medium: '보통', low: '낮음' };
 const keyDialog = document.querySelector('#key-dialog');
 const keyInput = document.querySelector('#key-input');
 const keyError = document.querySelector('#key-error');
+const homeButton = document.querySelector('#home-button');
+const lightThemeButton = document.querySelector('#theme-light');
+const darkThemeButton = document.querySelector('#theme-dark');
+const themeSwitch = document.querySelector('.theme-switch');
 const cameraInput = document.querySelector('#camera-input');
 const galleryInput = document.querySelector('#gallery-input');
 const preview = document.querySelector('#preview');
@@ -74,6 +79,55 @@ let currentImageBlob = null;
 let currentHistoryId = null;
 let currentConversation = [];
 let historyFilter = 'all';
+let isAnalyzing = false;
+
+function setTheme(theme) {
+    const selectedTheme = theme === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = selectedTheme;
+    themeSwitch.dataset.theme = selectedTheme;
+    localStorage.setItem(THEME_NAME, selectedTheme);
+    lightThemeButton.setAttribute('aria-pressed', String(selectedTheme === 'light'));
+    darkThemeButton.setAttribute('aria-pressed', String(selectedTheme === 'dark'));
+    document.querySelector('meta[name="theme-color"]').content = selectedTheme === 'dark' ? '#111815' : '#173b34';
+}
+
+setTheme(localStorage.getItem(THEME_NAME));
+lightThemeButton.addEventListener('click', () => setTheme('light'));
+darkThemeButton.addEventListener('click', () => setTheme('dark'));
+
+homeButton.addEventListener('click', () => {
+    if (isAnalyzing) return;
+    selectedFile = null;
+    currentAnalysis = null;
+    currentImageData = null;
+    currentImageBlob = null;
+    currentHistoryId = null;
+    currentConversation = [];
+    cameraInput.value = '';
+    galleryInput.value = '';
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = null;
+    preview.removeAttribute('src');
+    preview.hidden = true;
+    photoArea.classList.remove('has-photo');
+    photoCaption.hidden = true;
+    photoName.textContent = '';
+    photoType.textContent = '이미지';
+    emptyPhoto.hidden = false;
+    analyzeButton.disabled = true;
+    resultTabs.hidden = true;
+    copyTab.hidden = true;
+    resultActions.hidden = true;
+    followupPanel.hidden = true;
+    followupInput.value = '';
+    resultActionStatus.textContent = '';
+    copyStatus.textContent = '';
+    recognizedText.textContent = '';
+    resultText.textContent = '사진을 선택하면 분석 결과가 여기에 표시됩니다.';
+    selectResultTab(false);
+    renderConversation();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+});
 
 function openHistoryImageDb() {
     return new Promise((resolve, reject) => {
@@ -833,6 +887,8 @@ analyzeButton.addEventListener('click', async () => {
         return;
     }
     if (!selectedFile) return;
+    isAnalyzing = true;
+    homeButton.disabled = true;
     analyzeButton.disabled = true;
     resultText.textContent = '사진을 분석하고 있습니다...';
     resultTabs.hidden = true;
@@ -857,6 +913,8 @@ analyzeButton.addEventListener('click', async () => {
         copyPanel.hidden = true;
         resultText.textContent = `분석 중 오류가 발생했습니다: ${error.message}`;
     } finally {
+        isAnalyzing = false;
+        homeButton.disabled = false;
         analyzeButton.disabled = false;
     }
 });
