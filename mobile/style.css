@@ -823,14 +823,14 @@ body {
 }
 
 .settings-drawer {
-    width: min(440px, calc(100vw - 24px));
-    padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+    width: min(390px, 88vw);
+    padding: max(20px, env(safe-area-inset-top)) 18px max(20px, env(safe-area-inset-bottom));
     background: #fbfcf9;
     transition: transform 280ms cubic-bezier(.2, .75, .25, 1), visibility 280ms, background-color 220ms ease, color 220ms ease;
 }
 
 .drawer-heading {
-    padding-bottom: 18px;
+    padding-bottom: 14px;
 }
 
 .drawer-heading>div {
@@ -862,7 +862,7 @@ body {
 }
 
 .drawer-section {
-    padding: 19px 0;
+    padding: 15px 0;
 }
 
 .drawer-section h3 {
@@ -888,12 +888,12 @@ body {
 }
 
 .usage-panel {
-    padding: 14px;
+    padding: 11px;
     background: #f4f7f1;
 }
 
 .history-list {
-    max-height: 30vh;
+    max-height: 23vh;
 }
 
 .history-row {
@@ -1271,6 +1271,9 @@ main.app-layout {
     border: 1px solid #6c9384;
     border-radius: 999px;
     background: #244b40;
+    color: #d7e5dc;
+    cursor: pointer;
+    appearance: none;
 }
 
 .theme-switch-thumb {
@@ -1290,7 +1293,7 @@ main.app-layout {
     background: var(--accent);
 }
 
-.theme-option {
+.theme-icon {
     position: relative;
     z-index: 1;
     display: grid;
@@ -1298,20 +1301,18 @@ main.app-layout {
     height: 30px;
     place-items: center;
     padding: 0;
-    border: 0;
     border-radius: 999px;
-    background: transparent;
     color: #d7e5dc;
     font-size: 16px;
     line-height: 1;
     transition: color 180ms ease;
 }
 
-.theme-option[aria-pressed="true"] {
+.theme-switch[data-theme="light"] .theme-icon-light {
     color: var(--forest);
 }
 
-.theme-switch[data-theme="dark"] .theme-option[aria-pressed="true"] {
+.theme-switch[data-theme="dark"] .theme-icon-dark {
     color: #172019;
 }
 
@@ -1344,8 +1345,12 @@ html[data-theme="dark"] .theme-switch {
     background: #25342c;
 }
 
-html[data-theme="dark"] .theme-option:not([aria-pressed="true"]) {
+html[data-theme="dark"] .theme-icon {
     color: #d4dfd7;
+}
+
+html[data-theme="dark"] .theme-switch[data-theme="dark"] .theme-icon-dark {
+    color: #172019;
 }
 
 html[data-theme="dark"] .panel,
@@ -1586,8 +1591,20 @@ html[data-theme="dark"] .error {
         transform: translateX(34px);
     }
 
-    .theme-option {
+    .theme-icon {
         width: 31px;
         height: 28px;
+    }
+}
+
+.settings-drawer {
+    touch-action: pan-y;
+    overscroll-behavior: contain;
+}
+
+@media (max-width: 780px) {
+    .settings-drawer {
+        padding-right: 16px;
+        padding-left: 16px;
     }
 }

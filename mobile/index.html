@@ -22,13 +22,12 @@
         <div class="brand"><button id="home-button" class="brand-mark" type="button" aria-label="홈으로 초기화"
                 title="홈으로 초기화">◎</button><span>스마트 비전</span></div>
         <div class="header-actions"><button id="install-button" class="quiet" type="button" hidden>앱 설치</button>
-            <div class="theme-switch" role="group" aria-label="화면 테마" data-theme="light">
+            <button id="theme-toggle" class="theme-switch" type="button" aria-label="다크 모드로 전환" aria-pressed="false"
+                data-theme="light">
                 <span class="theme-switch-thumb" aria-hidden="true"></span>
-                <button id="theme-light" class="theme-option" type="button" aria-label="라이트 모드" title="라이트 모드"
-                    aria-pressed="true">☀</button>
-                <button id="theme-dark" class="theme-option" type="button" aria-label="다크 모드" title="다크 모드"
-                    aria-pressed="false">☾</button>
-            </div>
+                <span class="theme-icon theme-icon-light" aria-hidden="true">☀</span>
+                <span class="theme-icon theme-icon-dark" aria-hidden="true">☾</span>
+            </button>
             <button id="menu-toggle" class="menu-toggle" type="button" aria-label="메뉴 열기" aria-expanded="false"
                 aria-controls="settings-drawer"><span class="menu-icon"
                     aria-hidden="true"><i></i><i></i><i></i></span></button>

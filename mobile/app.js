@@ -29,8 +29,6 @@ const keyDialog = document.querySelector('#key-dialog');
 const keyInput = document.querySelector('#key-input');
 const keyError = document.querySelector('#key-error');
 const homeButton = document.querySelector('#home-button');
-const lightThemeButton = document.querySelector('#theme-light');
-const darkThemeButton = document.querySelector('#theme-dark');
 const themeSwitch = document.querySelector('.theme-switch');
 const cameraInput = document.querySelector('#camera-input');
 const galleryInput = document.querySelector('#gallery-input');
@@ -80,20 +78,22 @@ let currentHistoryId = null;
 let currentConversation = [];
 let historyFilter = 'all';
 let isAnalyzing = false;
+let drawerTouch = null;
 
 function setTheme(theme) {
     const selectedTheme = theme === 'dark' ? 'dark' : 'light';
     document.documentElement.dataset.theme = selectedTheme;
     themeSwitch.dataset.theme = selectedTheme;
     localStorage.setItem(THEME_NAME, selectedTheme);
-    lightThemeButton.setAttribute('aria-pressed', String(selectedTheme === 'light'));
-    darkThemeButton.setAttribute('aria-pressed', String(selectedTheme === 'dark'));
+    themeSwitch.setAttribute('aria-pressed', String(selectedTheme === 'dark'));
+    themeSwitch.setAttribute('aria-label', selectedTheme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환');
     document.querySelector('meta[name="theme-color"]').content = selectedTheme === 'dark' ? '#111815' : '#173b34';
 }
 
 setTheme(localStorage.getItem(THEME_NAME));
-lightThemeButton.addEventListener('click', () => setTheme('light'));
-darkThemeButton.addEventListener('click', () => setTheme('dark'));
+themeSwitch.addEventListener('click', () => {
+    setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+});
 
 homeButton.addEventListener('click', () => {
     if (isAnalyzing) return;
@@ -375,6 +375,10 @@ function renderConversation() {
 }
 
 function openDrawer() {
+    settingsDrawer.style.transform = '';
+    settingsDrawer.style.transition = '';
+    drawerBackdrop.style.opacity = '';
+    drawerBackdrop.style.animation = '';
     settingsDrawer.classList.add('is-open');
     settingsDrawer.removeAttribute('inert');
     settingsDrawer.setAttribute('aria-hidden', 'false');
@@ -385,6 +389,11 @@ function openDrawer() {
 }
 
 function closeDrawer() {
+    drawerTouch = null;
+    settingsDrawer.style.transform = '';
+    settingsDrawer.style.transition = '';
+    drawerBackdrop.style.opacity = '';
+    drawerBackdrop.style.animation = '';
     settingsDrawer.classList.remove('is-open');
     settingsDrawer.setAttribute('inert', '');
     settingsDrawer.setAttribute('aria-hidden', 'true');
@@ -393,6 +402,56 @@ function closeDrawer() {
     menuToggle.setAttribute('aria-label', '메뉴 열기');
     document.body.classList.remove('drawer-open');
 }
+
+settingsDrawer.addEventListener('touchstart', event => {
+    if (!settingsDrawer.classList.contains('is-open') || event.touches.length !== 1) {
+        drawerTouch = null;
+        return;
+    }
+    const touch = event.touches[0];
+    drawerTouch = { startX: touch.clientX, startY: touch.clientY, axis: null, deltaX: 0 };
+}, { passive: true });
+
+settingsDrawer.addEventListener('touchmove', event => {
+    if (!drawerTouch || event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    const deltaX = touch.clientX - drawerTouch.startX;
+    const deltaY = touch.clientY - drawerTouch.startY;
+
+    if (!drawerTouch.axis) {
+        if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < 10) return;
+        drawerTouch.axis = Math.abs(deltaX) > Math.abs(deltaY) * 1.25 ? 'horizontal' : 'vertical';
+    }
+    if (drawerTouch.axis !== 'horizontal' || deltaX <= 0) return;
+
+    event.preventDefault();
+    drawerTouch.deltaX = deltaX;
+    const distance = Math.min(deltaX, settingsDrawer.clientWidth);
+    settingsDrawer.style.transition = 'none';
+    settingsDrawer.style.transform = `translateX(${distance}px)`;
+    drawerBackdrop.style.animation = 'none';
+    drawerBackdrop.style.opacity = String(1 - distance / settingsDrawer.clientWidth);
+}, { passive: false });
+
+function finishDrawerTouch() {
+    if (!drawerTouch) return;
+    const shouldClose = drawerTouch.axis === 'horizontal'
+        && drawerTouch.deltaX >= settingsDrawer.clientWidth * 0.5;
+    drawerTouch = null;
+    settingsDrawer.style.transition = '';
+    drawerBackdrop.style.animation = '';
+
+    if (shouldClose) {
+        closeDrawer();
+        return;
+    }
+
+    settingsDrawer.style.transform = '';
+    drawerBackdrop.style.opacity = '';
+}
+
+settingsDrawer.addEventListener('touchend', finishDrawerTouch, { passive: true });
+settingsDrawer.addEventListener('touchcancel', finishDrawerTouch, { passive: true });
 
 menuToggle.addEventListener('click', () => {
     if (settingsDrawer.classList.contains('is-open')) closeDrawer();
