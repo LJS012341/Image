@@ -50,11 +50,29 @@ const copyStatus = document.querySelector('#copy-status');
 const cancelKey = document.querySelector('#cancel-key');
 const installButton = document.querySelector('#install-button');
 const installDialog = document.querySelector('#install-dialog');
+const confirmDialog = document.querySelector('#confirm-dialog');
+const confirmTitle = document.querySelector('#confirm-title');
+const confirmMessage = document.querySelector('#confirm-message');
+const confirmDeleteButton = document.querySelector('#confirm-delete');
 const menuToggle = document.querySelector('#menu-toggle');
 const settingsDrawer = document.querySelector('#settings-drawer');
 const drawerBackdrop = document.querySelector('#drawer-backdrop');
 const modelSelect = document.querySelector('#model-select');
 const modeSelect = document.querySelector('#mode-select');
+const customSelects = [
+    {
+        select: modeSelect,
+        trigger: document.querySelector('#mode-select-trigger'),
+        current: document.querySelector('#mode-select-current'),
+        options: document.querySelector('#mode-select-options')
+    },
+    {
+        select: modelSelect,
+        trigger: document.querySelector('#model-select-trigger'),
+        current: document.querySelector('#model-select-current'),
+        options: document.querySelector('#model-select-options')
+    }
+];
 const historyList = document.querySelector('#history-list');
 const historyCount = document.querySelector('#history-count');
 const historyStatus = document.querySelector('#history-status');
@@ -214,6 +232,109 @@ function renderModelUsage() {
     modelLimit.value = String(limit);
 }
 
+function closeCustomSelect(config, restoreFocus = false) {
+    config.trigger.setAttribute('aria-expanded', 'false');
+    config.options.hidden = true;
+    config.options.querySelectorAll('[role="option"]').forEach(option => {
+        option.tabIndex = -1;
+    });
+    if (restoreFocus) config.trigger.focus();
+}
+
+function closeCustomSelects(except = null) {
+    for (const config of customSelects) {
+        if (config !== except) closeCustomSelect(config);
+    }
+}
+
+function syncCustomSelect(config) {
+    config.current.textContent = config.select.selectedOptions[0]?.textContent || '';
+    config.options.querySelectorAll('[role="option"]').forEach(option => {
+        const selected = option.dataset.value === config.select.value;
+        option.setAttribute('aria-selected', String(selected));
+        option.tabIndex = selected ? 0 : -1;
+    });
+}
+
+function setupCustomSelect(config) {
+    config.options.replaceChildren(...[...config.select.options].map(option => {
+        const button = document.createElement('button');
+        button.className = 'select-option';
+        button.type = 'button';
+        button.setAttribute('role', 'option');
+        button.dataset.value = option.value;
+        button.textContent = option.textContent;
+        return button;
+    }));
+
+    config.trigger.addEventListener('click', () => {
+        if (config.trigger.getAttribute('aria-expanded') === 'true') {
+            closeCustomSelect(config);
+            return;
+        }
+        closeCustomSelects(config);
+        config.trigger.setAttribute('aria-expanded', 'true');
+        config.options.hidden = false;
+        syncCustomSelect(config);
+        config.options.querySelector('[aria-selected="true"]')?.focus();
+    });
+
+    config.trigger.addEventListener('keydown', event => {
+        if (!['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) return;
+        event.preventDefault();
+        config.trigger.click();
+    });
+
+    config.options.addEventListener('click', event => {
+        const option = event.target.closest('[role="option"]');
+        if (!option) return;
+        config.select.value = option.dataset.value;
+        config.select.dispatchEvent(new Event('change', { bubbles: true }));
+        closeCustomSelect(config, true);
+    });
+
+    config.options.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            closeCustomSelect(config, true);
+            return;
+        }
+        const options = [...config.options.querySelectorAll('[role="option"]')];
+        const index = options.indexOf(document.activeElement);
+        let nextIndex = index;
+        if (event.key === 'ArrowDown') nextIndex = (index + 1) % options.length;
+        else if (event.key === 'ArrowUp') nextIndex = (index - 1 + options.length) % options.length;
+        else if (event.key === 'Home') nextIndex = 0;
+        else if (event.key === 'End') nextIndex = options.length - 1;
+        else return;
+        event.preventDefault();
+        options[nextIndex].focus();
+    });
+
+    config.select.addEventListener('change', () => syncCustomSelect(config));
+    syncCustomSelect(config);
+}
+
+for (const config of customSelects) setupCustomSelect(config);
+
+document.addEventListener('pointerdown', event => {
+    if (customSelects.some(config => config.options.contains(event.target) || config.trigger.contains(event.target))) return;
+    closeCustomSelects();
+});
+
+function confirmAction(message, { title = '기록 삭제', confirmLabel = '삭제' } = {}) {
+    if (confirmDialog.open) return Promise.resolve(false);
+    confirmTitle.textContent = title;
+    confirmMessage.textContent = message;
+    confirmDeleteButton.textContent = confirmLabel;
+    confirmDialog.showModal();
+    return new Promise(resolve => {
+        confirmDialog.addEventListener('close', () => {
+            resolve(confirmDialog.returnValue === 'confirm');
+        }, { once: true });
+    });
+}
+
 function recordModelRequest(model) {
     const usage = readUsage();
     usage.counts[model] = (Number(usage.counts[model]) || 0) + 1;
@@ -369,10 +490,10 @@ historySearchInput.addEventListener('keydown', event => {
     }
 });
 
-function deleteHistoryEntry(id) {
+async function deleteHistoryEntry(id) {
     const history = readHistory();
     const entry = history.find(item => item.id === id);
-    if (!entry || !window.confirm(`'${entry.analysis?.title || '분석 결과'}' 기록을 삭제할까요?`)) return;
+    if (!entry || !(await confirmAction(`'${entry.analysis?.title || '분석 결과'}' 기록을 삭제할까요?`))) return;
     writeHistory(history.filter(item => item.id !== id));
     if (currentHistoryId === id) currentHistoryId = null;
     if (entry.imageId) {
@@ -536,6 +657,7 @@ if ([...modelSelect.options].some(option => option.value === storedModel)) model
 else modelSelect.value = DEFAULT_MODEL;
 const storedMode = localStorage.getItem(MODE_NAME);
 if ([...modeSelect.options].some(option => option.value === storedMode)) modeSelect.value = storedMode;
+for (const config of customSelects) syncCustomSelect(config);
 modelSelect.addEventListener('change', () => {
     localStorage.setItem(MODEL_NAME, modelSelect.value);
     renderModelUsage();
@@ -548,9 +670,13 @@ modelLimit.addEventListener('change', () => {
     localStorage.setItem(MODEL_LIMIT_NAME, JSON.stringify(limits));
     renderModelUsage();
 });
-document.querySelector('#clear-history').addEventListener('click', () => {
-    if (!readHistory().length || !window.confirm('저장된 분석 기록을 모두 삭제할까요?')) return;
-    const imageIds = readHistory().map(entry => entry.imageId).filter(Boolean);
+document.querySelector('#clear-history').addEventListener('click', async () => {
+    const history = readHistory();
+    if (!history.length || !(await confirmAction('저장된 분석 기록을 모두 삭제할까요?', {
+        title: '전체 기록 삭제',
+        confirmLabel: '모두 삭제'
+    }))) return;
+    const imageIds = history.map(entry => entry.imageId).filter(Boolean);
     localStorage.removeItem(HISTORY_NAME);
     currentHistoryId = null;
     historyStatus.textContent = '분석 기록을 삭제했습니다.';

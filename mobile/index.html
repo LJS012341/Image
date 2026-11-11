@@ -66,29 +66,39 @@
         <section class="drawer-section" aria-labelledby="analysis-settings-heading">
             <h3 id="analysis-settings-heading">분석 설정</h3>
             <div class="settings-field">
-                <label for="mode-select">분석 모드</label>
+                <label id="mode-select-label" for="mode-select-trigger">분석 모드</label>
                 <div class="select-wrap">
-                    <select id="mode-select" class="drawer-select">
+                    <select id="mode-select" class="drawer-select native-select" aria-hidden="true" tabindex="-1">
                         <option value="auto">자동 분류</option>
                         <option value="animal">동물</option>
                         <option value="object">물건</option>
                         <option value="food">음식</option>
                         <option value="text">글씨 읽기</option>
                     </select>
-                    <span class="select-chevron" aria-hidden="true"></span>
+                    <button id="mode-select-trigger" class="select-trigger" type="button" aria-haspopup="listbox"
+                        aria-expanded="false" aria-labelledby="mode-select-label mode-select-current">
+                        <span id="mode-select-current"></span><span class="select-chevron" aria-hidden="true"></span>
+                    </button>
+                    <div id="mode-select-options" class="select-options" role="listbox"
+                        aria-labelledby="mode-select-label" hidden></div>
                 </div>
             </div>
             <div class="settings-field">
-                <label for="model-select">Gemini 모델</label>
+                <label id="model-select-label" for="model-select-trigger">Gemini 모델</label>
                 <div class="select-wrap">
-                    <select id="model-select" class="drawer-select">
+                    <select id="model-select" class="drawer-select native-select" aria-hidden="true" tabindex="-1">
                         <option value="gemini-4-argon">Gemini 4 Argon</option>
                         <option value="gemini-3.8-flash">Gemini 3.8 Flash</option>
                         <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
                         <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite</option>
                         <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option>
                     </select>
-                    <span class="select-chevron" aria-hidden="true"></span>
+                    <button id="model-select-trigger" class="select-trigger" type="button" aria-haspopup="listbox"
+                        aria-expanded="false" aria-labelledby="model-select-label model-select-current">
+                        <span id="model-select-current"></span><span class="select-chevron" aria-hidden="true"></span>
+                    </button>
+                    <div id="model-select-options" class="select-options" role="listbox"
+                        aria-labelledby="model-select-label" hidden></div>
                 </div>
             </div>
             <div class="usage-panel">
@@ -179,6 +189,19 @@
             <p>Chrome 메뉴(⋮)에서 <strong>앱 설치</strong> 또는 <strong>홈 화면에 추가</strong>를 선택하세요. 설치 후 홈 화면의 아이콘으로 열 수 있습니다.</p>
             <p>이미지 분석에는 인터넷 연결이 필요합니다.</p>
             <button id="close-install" type="button" class="primary">확인</button>
+        </div>
+    </dialog>
+    <dialog id="confirm-dialog" class="confirm-dialog" aria-labelledby="confirm-title"
+        aria-describedby="confirm-message">
+        <div class="confirm-content">
+            <span class="confirm-mark" aria-hidden="true"><span class="trash-icon"></span></span>
+            <p class="confirm-kicker">SMART VISION</p>
+            <h2 id="confirm-title">기록 삭제</h2>
+            <p id="confirm-message"></p>
+            <form method="dialog" class="confirm-actions">
+                <button class="confirm-cancel" type="submit" value="cancel">취소</button>
+                <button id="confirm-delete" class="confirm-delete" type="submit" value="confirm">삭제</button>
+            </form>
         </div>
     </dialog>
     <dialog id="key-dialog" aria-labelledby="key-title">
