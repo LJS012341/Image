@@ -214,16 +214,39 @@
             </form>
         </div>
     </dialog>
-    <dialog id="key-dialog" aria-labelledby="key-title">
-        <form id="key-form" method="dialog">
-            <span class="eyebrow">SETUP / API</span>
+    <dialog id="key-dialog" class="confirm-dialog key-dialog" aria-labelledby="key-title">
+        <form id="key-form" class="confirm-content key-content" method="dialog">
+            <span class="confirm-mark key-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="8" cy="15" r="4"></circle>
+                    <path d="M11 12 20 3m-3 3 2 2m-5 1 2 2"></path>
+                </svg>
+            </span>
+            <p class="confirm-kicker">SMART VISION / API</p>
             <h2 id="key-title">Gemini API 키 입력</h2>
-            <p>키는 이 기기의 브라우저 저장소에 보관됩니다. 공유 기기에서는 사용하지 마세요.</p>
+            <p class="key-description">사진을 분석하려면 Gemini API 키가 필요합니다.</p>
             <label for="key-input">API 키</label>
             <input id="key-input" type="password" autocomplete="off" required placeholder="API 키 입력">
             <p id="key-error" class="error" role="alert" hidden></p>
-            <div class="dialog-actions"><button id="cancel-key" type="button" class="quiet" hidden>취소</button><button
-                    type="submit" class="primary">확인</button></div>
+            <details class="key-guide">
+                <summary>API 키가 처음이신가요? <span>발급 방법</span></summary>
+                <div class="key-guide-content">
+                    <ol>
+                        <li>Google AI Studio에 로그인하세요.</li>
+                        <li>API Keys에서 키를 확인하거나 새로 만드세요. 필요한 경우 프로젝트를 선택하세요.</li>
+                        <li>키를 복사해 위 입력란에 붙여넣으세요.</li>
+                    </ol>
+                    <a id="api-key-guide-link" href="https://aistudio.google.com/apikey" target="_blank"
+                        rel="noopener noreferrer">Google AI Studio 열기 <span aria-hidden="true">↗</span></a>
+                </div>
+            </details>
+            <p class="key-notice">키는 이 기기에 저장됩니다. 다른 사람과 공유하거나 공용 기기에서 사용하지 마세요.
+                사용량과 모델에 따라 비용이 발생할 수 있습니다.</p>
+            <div class="confirm-actions key-actions">
+                <button id="cancel-key" class="confirm-cancel" type="button" hidden>취소</button>
+                <button class="key-confirm" type="submit">확인</button>
+            </div>
         </form>
     </dialog>
     <script src="./app.js" defer></script>

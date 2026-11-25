@@ -1265,6 +1265,7 @@ function openKeyDialog() {
 }
 
 if (!localStorage.getItem(KEY_NAME)) openKeyDialog();
+if (window.SmartVisionNative) document.querySelector('#api-key-guide-link').removeAttribute('target');
 document.querySelector('#change-key').addEventListener('click', () => {
     closeDrawer();
     openKeyDialog();
