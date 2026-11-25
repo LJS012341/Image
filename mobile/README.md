@@ -11,6 +11,8 @@
 	- PWA: `https://<owner>.github.io/<repo>/`
 	- Android APK: `https://<owner>.github.io/<repo>/smart-vision.apk`
 
+워크플로는 먼저 사이트와 APK를 빌드해 Pages 아티팩트로 업로드한 다음 별도 작업에서 배포합니다. 배포 작업만 실패하면 Actions 실행 화면의 **Re-run failed jobs**로 배포를 다시 시도할 수 있습니다.
+
 ## 설치 및 QR 코드
 
 Android에서는 APK 주소를 열어 다운로드한 뒤 설치를 진행합니다. 브라우저가 요청하면 해당 출처의 앱 설치를 허용해야 할 수 있습니다. 이 workflow의 APK는 테스트용 debug 서명입니다. 재빌드 후 앱을 업데이트하거나 Google Play에 배포하려면 직접 관리하는 고정 서명 키와 release 빌드 설정이 필요합니다.
