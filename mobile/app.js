@@ -104,6 +104,7 @@ let historyFilter = 'all';
 let historySearchQuery = '';
 let isAnalyzing = false;
 let isFollowingUp = false;
+let pendingFollowup = null;
 let drawerTouch = null;
 
 function setTheme(theme) {
@@ -543,12 +544,18 @@ async function saveAnalysis(analysis) {
     }
 }
 
-function updateCurrentConversation() {
+function updateConversationForHistory(id, messages) {
     const history = readHistory();
-    const entry = history.find(item => item.id === currentHistoryId);
+    const entry = history.find(item => item.id === id);
     if (!entry) return;
-    entry.conversation = currentConversation;
-    writeHistory(history);
+    entry.conversation = messages;
+    if (!writeHistory(history)) {
+        resultActionStatus.textContent = '저장 공간이 부족해 대화 기록을 저장하지 못했습니다.';
+    }
+}
+
+function updateCurrentConversation() {
+    updateConversationForHistory(currentHistoryId, currentConversation);
 }
 
 function updateConversationHistory(resetExpansion = false) {
@@ -566,7 +573,9 @@ function updateConversationHistory(resetExpansion = false) {
     if (!hasConversation) return;
 
     requestAnimationFrame(() => {
-        const hasOverflow = conversation.scrollHeight > conversation.clientHeight + 1;
+        const hasOverflow = conversation.classList.contains('is-expanded')
+            ? conversation.scrollHeight > window.innerHeight * 0.4 + 1
+            : conversation.scrollHeight > conversation.clientHeight + 1;
         conversationExpand.hidden = !hasOverflow;
         if (!hasOverflow) {
             conversation.classList.remove('is-expanded');
@@ -598,13 +607,35 @@ function appendConversationMessage(role, text, updateHistory = true, messageInde
     if (updateHistory) updateConversationHistory();
 }
 
-function renderConversation() {
+function renderConversation(resetExpansion = true, scrollToLatest = false) {
     conversation.replaceChildren();
     conversationHistory.hidden = !currentConversation.length;
     currentConversation.forEach((message, index) => {
         appendConversationMessage(message.role, message.text, false, index);
     });
-    updateConversationHistory(true);
+    if (pendingFollowup?.messages === currentConversation) {
+        const message = document.createElement('p');
+        message.className = 'conversation-message model';
+        const label = document.createElement('strong');
+        label.textContent = '스마트 비전';
+        const loading = document.createElement('span');
+        loading.className = 'conversation-loading';
+        loading.setAttribute('role', 'status');
+        loading.setAttribute('aria-label', '답변을 작성하고 있습니다');
+        for (let i = 0; i < 3; i++) {
+            const dot = document.createElement('span');
+            dot.setAttribute('aria-hidden', 'true');
+            loading.append(dot);
+        }
+        message.append(label, loading);
+        conversation.append(message);
+    }
+    updateConversationHistory(resetExpansion);
+    if (scrollToLatest) {
+        requestAnimationFrame(() => {
+            conversation.scrollTop = conversation.scrollHeight;
+        });
+    }
 }
 
 async function removeConversationTurn(startIndex) {
@@ -877,17 +908,20 @@ document.querySelector('#followup-toggle').addEventListener('click', event => {
 
 function cleanFollowupAnswer(text) {
     return text
-        .replace(/```[^\n]*\n?([\s\S]*?)```/g, '$1')
-        .replace(/^\s{0,3}#{1,6}\s*/gm, '')
-        .replace(/^\s*>+\s?/gm, '')
-        .replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/gm, '')
+        .replace(/^[ \t]*```[^\n]*\n?/gm, '')
+        .replace(/^[ \t]*~~~[^\n]*\n?/gm, '')
+        .replace(/^[ \t]{0,3}#{1,6}[ \t]*/gm, '')
+        .replace(/^[ \t]*>+[ \t]?/gm, '')
+        .replace(/^[ \t]*(?:[-*+][ \t]+|\d+[.)][ \t]+)/gm, '')
+        .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
         .replace(/\*\*(.*?)\*\*/gs, '$1')
         .replace(/__(.*?)__/gs, '$1')
         .replace(/~~(.*?)~~/gs, '$1')
         .replace(/\*([^*\n]+)\*/g, '$1')
-        .replace(/_([^_\n]+)_/g, '$1')
+        .replace(/(^|[^\w])_([^_\n]+)_(?!\w)/g, '$1$2')
         .replace(/`([^`\n]+)`/g, '$1')
-        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+        .replace(/\\([\\`*_[\]{}()#+.!>~-])/g, '$1')
         .replace(/(?:\^{2,}|#{2,})/g, '')
         .replace(/\n{3,}/g, '\n\n')
         .trim();
@@ -1122,40 +1156,47 @@ async function requestModel(contents, generationConfig) {
 followupForm.addEventListener('submit', async event => {
     event.preventDefault();
     const question = followupInput.value.trim();
-    if (!question || !currentAnalysis) return;
+    if (!question || !currentAnalysis || isFollowingUp) return;
     const submit = followupForm.querySelector('button');
     submit.disabled = true;
     isFollowingUp = true;
-    conversation.querySelectorAll('.conversation-delete').forEach(button => {
-        button.disabled = true;
-    });
-    currentConversation.push({ role: 'user', text: question });
-    appendConversationMessage('user', question, false, currentConversation.length - 1);
+    const messages = currentConversation;
+    const analysis = currentAnalysis;
+    const image = currentImageData;
+    messages.push({ role: 'user', text: question });
+    const pending = { messages, historyId: currentHistoryId };
+    pendingFollowup = pending;
     followupInput.value = '';
-    const previousConversation = currentConversation.slice(0, -1)
+    document.querySelector('#followup-toggle').textContent = '대화 접기';
+    renderConversation(false, true);
+    const previousConversation = messages.slice(0, -1)
         .map(item => `${item.role === 'user' ? '사용자' : '도우미'}: ${item.text}`).join('\n');
-    const parts = [{ text: `분석 결과: ${analysisAsText()}\n이전 대화: ${previousConversation}\n사용자의 질문에 한국어로 간결하고 정확하게 답하세요. 핵심 답변을 먼저 제시하고, 필요한 정보는 짧은 문단과 일반 텍스트 항목으로 정리하세요. Markdown 문법이나 장식 기호(#, *, **, _, ^^, >, 코드 표시, 글머리표)를 사용하지 말고, 제목/굵게/인용/코드블록/목록 서식을 만들지 마세요. 문단과 줄바꿈만 사용하세요. 확인할 수 없는 내용은 추측하지 말고 밝혀 주세요.\n질문: ${question}` }];
-    if (currentImageData) parts.push({ inline_data: { mime_type: 'image/jpeg', data: currentImageData } });
+    const parts = [{ text: `분석 결과: ${analysisAsText(analysis)}\n이전 대화: ${previousConversation}\n사용자의 질문에 한국어로 간결하고 정확하게 답하세요. 핵심 답변을 먼저 제시하고, 필요한 정보는 짧은 문단과 일반 텍스트 항목으로 정리하세요. Markdown 문법이나 장식 기호(#, *, **, _, ^^, >, 코드 표시, 글머리표)를 사용하지 말고, 제목/굵게/인용/코드블록/목록 서식을 만들지 마세요. 문단과 줄바꿈만 사용하세요. 확인할 수 없는 내용은 추측하지 말고 밝혀 주세요.\n질문: ${question}` }];
+    if (image) parts.push({ inline_data: { mime_type: 'image/jpeg', data: image } });
     try {
+        if (!pending.historyId) {
+            const saving = saveAnalysis(analysis);
+            pending.historyId = currentHistoryId;
+            await saving;
+        }
+        updateConversationForHistory(pending.historyId, messages);
         const answer = await requestModel([{ role: 'user', parts }]);
         const cleanedAnswer = cleanFollowupAnswer(answer || '답변을 생성하지 못했습니다.')
             || '답변을 생성하지 못했습니다.';
-        currentConversation.push({ role: 'model', text: cleanedAnswer });
-        appendConversationMessage('model', cleanedAnswer, false, currentConversation.length - 1);
-        if (!currentHistoryId) await saveAnalysis(currentAnalysis);
-        updateCurrentConversation();
+        messages.push({ role: 'model', text: cleanedAnswer });
     } catch (error) {
         const message = `질문 처리 중 오류가 발생했습니다: ${error.message}`;
-        currentConversation.push({ role: 'model', text: message });
-        appendConversationMessage('model', message, false, currentConversation.length - 1);
-        if (currentHistoryId) updateCurrentConversation();
+        messages.push({ role: 'model', text: message });
     } finally {
         isFollowingUp = false;
-        conversation.querySelectorAll('.conversation-delete').forEach(button => {
-            button.disabled = false;
-        });
+        pendingFollowup = null;
+        try {
+            updateConversationForHistory(pending.historyId, messages);
+        } catch (error) {
+            resultActionStatus.textContent = `대화 기록 저장 실패: ${error.message}`;
+        }
+        if (currentAnalysis) renderConversation(false, currentConversation === messages);
         submit.disabled = false;
-        followupInput.focus();
     }
 });
 
@@ -1163,7 +1204,9 @@ async function loadHistoryEntry(entry) {
     currentAnalysis = entry.analysis;
     currentHistoryId = entry.id;
     let conversationWasCleaned = false;
-    currentConversation = Array.isArray(entry.conversation)
+    currentConversation = pendingFollowup?.historyId === entry.id
+        ? pendingFollowup.messages
+        : Array.isArray(entry.conversation)
         ? entry.conversation.map(message => {
             if (message.role !== 'model' || typeof message.text !== 'string') return message;
             const text = cleanFollowupAnswer(message.text);
